@@ -1,0 +1,228 @@
+---
+title: "Native APIs (desktop)"
+description: "Expose Node.js and Electron functionality to your plugin via Vencord's IPC bridge, available only on Discord Desktop."
+---
+
+Discord Desktop runs on Electron, which means the renderer process (where Discord's React app lives) and a main Node.js process run side-by-side. Vencord provides a typed IPC bridge that lets desktop-only plugins expose functions that run in the main process and call them from the renderer as if they were regular async functions.
+
+<Warning>
+Native APIs are only available on **Discord Desktop** (and Vesktop). They do not exist in the web browser version of Discord. Always guard native code with the `IS_DESKTOP` global or the `target: "DESKTOP"` setting field.
+</Warning>
+
+## Platform detection globals
+
+Vencord injects these boolean constants at build time:
+
+| Global | When `true` |
+|--------|-------------|
+| `IS_DISCORD_DESKTOP` | Running inside the official Discord Desktop Electron app. |
+| `IS_VESKTOP` | Running inside [Vesktop](https://github.com/Vencord/Vesktop). |
+| `IS_WEB` | Running as a browser extension or userscript. |
+| `IS_DEV` | A development build. |
+
+For most guards, checking `IS_DISCORD_DESKTOP` is sufficient. Vesktop also exposes native APIs through a separate bridge (`VesktopNative`), so if you want to support both, check both flags or use the `target` field on individual settings.
+
+## Structuring a plugin with native code
+
+A plugin that uses native APIs has two entry points:
+
+```
+src/plugins/myPlugin/
+├── index.ts     ← renderer-side plugin code
+└── native.ts    ← main-process functions
+```
+
+Vencord's build system discovers `native.ts` automatically and registers each of its named exports as an IPC handler.
+
+### Writing the native file
+
+Every exported function in `native.ts` must accept an `IpcMainInvokeEvent` as its first argument. Vencord strips this argument from the renderer-side type automatically.
+
+```typescript
+// src/plugins/myPlugin/native.ts
+import { IpcMainInvokeEvent } from "electron";
+import { request } from "https";
+
+// Resolves a redirect chain for URLs that can't be fetched from the renderer
+// due to CORS restrictions.
+export async function resolveRedirect(_: IpcMainInvokeEvent, url: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const req = request(new URL(url), { method: "HEAD" }, res => {
+            resolve(res.headers.location ? resolveRedirect(_, res.headers.location) : url);
+        });
+        req.on("error", reject);
+        req.end();
+    });
+}
+```
+
+<Note>
+The `IpcMainInvokeEvent` parameter is always first. You can name it `_` or `event` — Vencord uses it internally but you can ignore it in most cases.
+</Note>
+
+### Calling native functions from the renderer
+
+Use the `PluginNative` type to get a correctly typed accessor. The type parameter is `typeof import("./native")`, which strips `IpcMainInvokeEvent` from every function signature and wraps synchronous return values in `Promise`.
+
+```typescript
+// src/plugins/myPlugin/index.ts
+import definePlugin, { PluginNative } from "@utils/types";
+
+// VencordNative.pluginHelpers is keyed by the plugin name as registered
+// in definePlugin({ name: ... }).
+const Native = VencordNative.pluginHelpers.MyPlugin as PluginNative<typeof import("./native")>;
+
+export default definePlugin({
+    name: "MyPlugin",
+    description: "Opens links in native apps",
+    authors: [],
+
+    async handleLink(url: string) {
+        // resolveRedirect runs in the Electron main process
+        const resolvedUrl = await Native.resolveRedirect(url);
+        VencordNative.native.openExternal(resolvedUrl);
+    }
+});
+```
+
+## The `PluginNative` type
+
+`PluginNative` is defined in `src/utils/types.ts`:
+
+```typescript
+export type PluginNative<PluginExports extends Record<string, (event: Electron.IpcMainInvokeEvent, ...args: any[]) => any>> = {
+    [key in keyof PluginExports]:
+        PluginExports[key] extends (event: Electron.IpcMainInvokeEvent, ...args: infer Args) => infer Return
+            ? (...args: Args) => Return extends Promise<any> ? Return : Promise<Return>
+            : never;
+};
+```
+
+This means:
+
+- The `IpcMainInvokeEvent` first argument is removed.
+- All return values become `Promise<T>`, even if the native function is synchronous.
+- TypeScript enforces that you only call functions that actually exist in your `native.ts`.
+
+## Built-in `VencordNative` APIs
+
+`VencordNative` (defined in `src/VencordNative.ts`) provides additional built-in helpers available to all plugins on desktop:
+
+```typescript
+// Open a URL in the system default browser
+VencordNative.native.openExternal("https://example.com");
+
+// Get Electron/Node/Chrome version strings
+const versions = VencordNative.native.getVersions();
+// { node: "...", electron: "...", chrome: "..." }
+
+// Open the user's themes folder
+VencordNative.themes.openFolder();
+
+// Open the Quick CSS file
+VencordNative.quickCss.openFile();
+
+// Listen for Quick CSS changes (desktop only)
+VencordNative.quickCss.addChangeListener(newCss => {
+    console.log("CSS updated:", newCss);
+});
+```
+
+## Gating settings to desktop only
+
+Use `target: "DESKTOP"` on any setting that only makes sense on Desktop. The Vencord settings UI hides these options when running in the browser:
+
+```typescript
+import { definePluginSettings } from "@api/Settings";
+import { OptionType } from "@utils/types";
+
+const settings = definePluginSettings({
+    openInApp: {
+        type: OptionType.BOOLEAN,
+        description: "Open links in their native app",
+        default: true,
+        target: "DESKTOP"   // hidden when running as a browser extension
+    },
+    someWebSetting: {
+        type: OptionType.BOOLEAN,
+        description: "A setting that works everywhere",
+        default: false,
+        target: "BOTH"      // shown on all platforms (default)
+    }
+});
+```
+
+The `target` field accepts `"DESKTOP"`, `"WEB"`, or `"BOTH"`.
+
+## Guarding plugin activation
+
+If your entire plugin is desktop-only, use a `predicate` on every patch or check `IS_DISCORD_DESKTOP` in `start()`:
+
+```typescript
+export default definePlugin({
+    name: "DesktopOnlyPlugin",
+    description: "Only runs on Discord Desktop",
+    authors: [],
+
+    patches: [
+        {
+            find: "some.desktop.api",
+            predicate: () => IS_DISCORD_DESKTOP,
+            replacement: {
+                match: /somePattern/,
+                replace: "$self.patch()"
+            }
+        }
+    ],
+
+    start() {
+        if (!IS_DISCORD_DESKTOP) return;
+        // safe to use VencordNative here
+    }
+});
+```
+
+## Real-world example: OpenInApp
+
+The `OpenInApp` plugin (`src/plugins/openInApp/`) is a good reference. Its `native.ts` follows the CORS-restricted redirect pattern and its `index.ts` calls `Native.resolveRedirect` before invoking `VencordNative.native.openExternal`:
+
+```typescript
+// native.ts — runs in the Electron main process
+import { IpcMainInvokeEvent } from "electron";
+import { request } from "https";
+
+const validRedirectUrls = /^https:\/\/(spotify\.link|s\.team)\/.+$/;
+
+function getRedirect(url: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const req = request(new URL(url), { method: "HEAD" }, res => {
+            resolve(res.headers.location ? getRedirect(res.headers.location) : url);
+        });
+        req.on("error", reject);
+        req.end();
+    });
+}
+
+export async function resolveRedirect(_: IpcMainInvokeEvent, url: string) {
+    if (!validRedirectUrls.test(url)) return url;
+    return getRedirect(url);
+}
+```
+
+```typescript
+// index.ts — runs in the renderer
+import definePlugin, { PluginNative } from "@utils/types";
+import { showToast, Toasts } from "@webpack/common";
+
+const Native = VencordNative.pluginHelpers.OpenInApp as PluginNative<typeof import("./native")>;
+
+export default definePlugin({
+    name: "OpenInApp",
+    // ...
+    async handleLink(data: { href: string }) {
+        const url = await Native.resolveRedirect(data.href);
+        VencordNative.native.openExternal(url);
+        showToast("Opened link in native app", Toasts.Type.SUCCESS);
+    }
+});
+```

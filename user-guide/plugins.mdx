@@ -1,0 +1,162 @@
+---
+title: "Plugins"
+description: "Explore and manage Vencord's 100+ built-in plugins to enhance your Discord experience."
+---
+
+Plugins are the core of Vencord. Each plugin is a self-contained enhancement — from quality-of-life tweaks to entirely new features — that you can enable or disable at any time without reinstalling anything.
+
+## Managing plugins
+
+### Opening the Plugins tab
+
+Open Discord **Settings** and look for the **Vencord Settings** section in the left sidebar. Click **Plugins** to open the plugin browser.
+
+<Note>
+  The position of the Vencord settings section in the sidebar is configurable. By default it appears above the **Nitro** section. You can change this under **Settings → Vencord → Vencord Settings location**.
+</Note>
+
+### Enabling and disabling plugins
+
+The plugin browser shows every available plugin along with a short description and toggle switch. Flip the switch to enable or disable a plugin. Most plugins take effect immediately — no restart needed.
+
+<Steps>
+  <Step title="Open Settings → Plugins">
+    Click the gear icon at the bottom of the Discord sidebar to open Settings, then click **Plugins** in the Vencord section.
+  </Step>
+  <Step title="Find the plugin you want">
+    Use the search bar at the top of the plugin list to filter by name or keyword.
+  </Step>
+  <Step title="Toggle the plugin">
+    Click the toggle switch next to the plugin name. A checkmark or filled indicator means the plugin is active.
+  </Step>
+  <Step title="Restart if required">
+    Some plugins display a **"Restart required"** badge when enabled. Click the **Restart** button that appears in the notification, or restart Discord manually for the change to take effect.
+  </Step>
+</Steps>
+
+### Configuring plugin settings
+
+Many plugins expose their own settings panel. Click the **gear icon** that appears next to a plugin's toggle to open its configuration. Settings are saved automatically and persist across sessions.
+
+## Plugin dependencies
+
+Some plugins depend on other plugins to function. Vencord handles this automatically: when you enable a plugin that requires another, the dependency is enabled alongside it and marked as required. You cannot disable a required dependency while the dependent plugin is active.
+
+<Warning>
+  Disabling a plugin that another enabled plugin depends on is blocked by the UI. Disable the dependent plugin first, then disable the dependency if needed.
+</Warning>
+
+## Built-in plugin categories
+
+Vencord ships with over 160 built-in plugins covering a wide range of use cases. Here are notable plugins by category.
+
+### UI enhancements
+
+Plugins that improve or extend Discord's visual interface.
+
+| Plugin | What it does |
+|---|---|
+| `betterFolders` | Adds a sidebar-only folder view and per-folder server lists |
+| `betterSettings` | Opens the Settings modal in-place rather than as a full overlay |
+| `imageZoom` | Lets you zoom into images in chat by scrolling |
+| `memberCount` | Displays online and total member counts in the server member list |
+| `pinDms` | Allows pinning DM conversations to the top of the DM list |
+| `alwaysAnimate` | Forces animated avatars and emotes to always play |
+| `betterRoleDot` | Replaces the colored role dot with the actual role color |
+| `biggerStreamPreview` | Makes stream previews in voice channels larger |
+| `noMosaic` | Removes the mosaic grid layout for multiple image attachments |
+| `showAllMessageButtons` | Always shows all message action buttons without hovering |
+| `typingIndicator` | Shows a typing indicator next to channel names in the sidebar |
+| `platformIndicators` | Displays which device (desktop, mobile, web) a user is on |
+| `roleColorEverywhere` | Applies a user's role color to their name in more places |
+
+### Message enhancements
+
+Plugins that improve how messages are composed, displayed, or managed.
+
+| Plugin | What it does |
+|---|---|
+| `messageLogger` | Logs deleted and edited messages locally and lets you view their history |
+| `mentionAvatars` | Shows small avatars next to @mentions in messages |
+| `replyTimestamp` | Shows the timestamp of the message being replied to |
+| `messageLatency` | Displays the time between a message being sent and received |
+| `messageLinkEmbeds` | Embeds a preview of linked messages inline in chat |
+| `noReplyMention` | Disables the @mention ping in replies by default |
+| `betterNotes` | Adds character count and markdown formatting to user notes |
+| `dontRoundMyTimestamps` | Shows exact timestamps instead of "5 minutes ago" |
+| `textReplace` | Automatically replaces text strings as you type |
+| `validReply` | Fixes reply context showing outdated message content |
+
+### Privacy and safety
+
+Plugins that reduce data exposure and improve security.
+
+| Plugin | What it does |
+|---|---|
+| `NoTrack` *(required, always on)* | Disables Discord analytics, metrics, and Sentry crash reporting |
+| `clearURLs` | Strips tracking parameters from URLs pasted in messages |
+| `blurNsfw` | Blurs NSFW channel images until you hover over them |
+| `silentTyping` | Prevents Discord from showing that you are typing |
+| `anonymiseFileNames` | Replaces uploaded file names with a random string |
+| `noBlockedMessages` | Hides messages from blocked users rather than collapsing them |
+| `hideAttachments` | Adds a toggle to hide media and attachments in a channel |
+
+<Note>
+  `NoTrack` is a required core plugin. It runs at startup and cannot be disabled. It blocks Discord's analytics handler, nullifies the metrics reporting interval, and aborts the Sentry WebpackInstance before it initializes — meaning no crash data ever leaves your client.
+</Note>
+
+### Media and rich content
+
+Plugins that enhance audio, video, embeds, and rich media.
+
+| Plugin | What it does |
+|---|---|
+| `spotifyControls` | Adds a Spotify now-playing widget to the bottom of the channel list with playback controls |
+| `gifPaste` | Pastes a GIF URL into the message box instead of sending it directly |
+| `voiceMessages` | Lets you send and play back voice messages from any platform |
+| `fakeNitro` | Unlocks Nitro-exclusive emoji, sticker, and streaming features locally |
+| `voiceDownload` | Adds a download button to voice messages |
+| `pictureInPicture` | Adds a picture-in-picture button to videos in chat |
+| `dearrow` | Uses the DeArrow API to replace clickbait YouTube thumbnails and titles |
+| `imageLink` | Makes image attachments clickable links to their original URL |
+| `volumeBooster` | Allows raising the volume of users and media above the 200% Discord cap |
+| `callTimer` | Displays a timer showing how long you have been in a voice call |
+
+### Developer tools
+
+Plugins for developers and power users who want to inspect or debug Discord internals.
+
+| Plugin | What it does |
+|---|---|
+| `experiments` | Enables Discord's internal A/B experiment overrides panel |
+| `viewRaw` | Adds a **View Raw** option to messages to see the raw JSON payload |
+| `reactErrorDecoder` | Minified React error codes are decoded into readable messages |
+| `consoleShortcuts` | Injects useful globals into the DevTools console (e.g. `Vencord`, `webpack`) |
+| `devCompanion` *(dev builds only)* | Integrates with the Vencord DevCompanion browser extension |
+| `startupTimings` | Logs a breakdown of Vencord startup timing to the console |
+| `f8break` | Triggers a DevTools breakpoint when F8 is pressed |
+
+## Core plugins
+
+A small set of plugins are marked `required: true` and run unconditionally. You will see them listed in the Plugins tab but their toggles are locked. These include:
+
+- **NoTrack** — blocks all analytics and crash reporting
+- **Settings** — renders the Vencord Settings section itself
+- **SupportHelper** — provides context in the Vencord support channel
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Themes" icon="palette" href="/user-guide/themes">
+    Style Discord with CSS themes alongside your plugins.
+  </Card>
+  <Card title="Custom CSS" icon="code" href="/user-guide/custom-css">
+    Write your own Quick CSS to fine-tune any visual detail.
+  </Card>
+  <Card title="Build a plugin" icon="puzzle-piece" href="/plugins/quickstart">
+    Create your own plugin using the Vencord plugin API.
+  </Card>
+  <Card title="Plugin structure" icon="sitemap" href="/plugins/plugin-structure">
+    Understand the anatomy of a Vencord plugin file.
+  </Card>
+</CardGroup>

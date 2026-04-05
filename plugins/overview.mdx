@@ -1,0 +1,155 @@
+---
+title: "Plugin development overview"
+description: "Learn what Vencord plugins can do, how the plugin API is structured, and what the rules are before you start building."
+---
+
+Vencord plugins are TypeScript modules that hook into Discord's internals at runtime. They run inside the Discord client process and have access to the full webpack module graph, React tree, Flux dispatcher, and DOM — through carefully controlled APIs.
+
+## What plugins can do
+
+### Patch webpack modules
+
+The most powerful capability available to plugins is patching Discord's bundled JavaScript. Vencord intercepts webpack module evaluation and applies regex-based find-and-replace substitutions before the module runs. This lets you modify any part of Discord's UI logic or behaviour without touching the source.
+
+```typescript
+patches: [
+  {
+    find: '.dispatch({type:"TYPING_START_LOCAL"',
+    replacement: {
+      match: /startTyping\(\i\){.+?},stop/,
+      replace: "startTyping:$self.startTyping,stop"
+    }
+  }
+]
+```
+
+### Register custom slash commands
+
+Plugins can register client-side slash commands that appear in Discord's command picker. Commands have typed options, execute handlers, and can send bot-style messages back to the channel — all without a bot account.
+
+### Add UI elements
+
+Plugins can inject UI components into specific Discord surfaces:
+
+| Surface | API field |
+|---|---|
+| Chat bar buttons | `chatBarButton` |
+| Message popover buttons | `messagePopoverButton` |
+| Message accessories (below message content) | `renderMessageAccessory` |
+| Message decorations (inline, inside the message) | `renderMessageDecoration` |
+| Member list decorators | `renderMemberListDecorator` |
+| Context menu items | `contextMenus` |
+| User profile badges | `userProfileBadge` |
+| Vencord toolbox actions | `toolboxActions` |
+
+### Intercept message events
+
+Plugins can listen for or modify messages before they are sent or after they are clicked:
+
+- `onBeforeMessageSend` — mutate the message object before it reaches Discord's API
+- `onBeforeMessageEdit` — mutate a message edit before it is submitted
+- `onMessageClick` — react to a message being clicked
+
+### Subscribe to Flux events
+
+Any Flux event Discord dispatches can be subscribed to from the `flux` field. Handlers receive the full event payload and may be async.
+
+```typescript
+flux: {
+  MESSAGE_CREATE: ({ message }) => {
+    console.log("New message:", message.content);
+  }
+}
+```
+
+### Persist data
+
+Plugin settings defined with `definePluginSettings` are automatically persisted to Vencord's settings store and exposed in the UI. For arbitrary data, plugins can use `Vencord.PlainSettings` directly or the `DataStore` API (`@api/DataStore`).
+
+### Inject managed styles
+
+The `managedStyle` field accepts a CSS string that Vencord automatically enables when the plugin starts and disables when it stops. For larger stylesheets, import a `.css` file and pass the module reference.
+
+## The plugin API surface
+
+Every plugin is a default export from `definePlugin`, a thin wrapper that gives the object proper TypeScript typings:
+
+```typescript
+import definePlugin from "@utils/types";
+
+export default definePlugin({
+  name: "MyPlugin",
+  description: "Does something useful.",
+  authors: [{ name: "you", id: 0n }],
+});
+```
+
+Beyond `definePlugin`, Vencord provides a collection of helper APIs under `@api/*`:
+
+| Package | Purpose |
+|---|---|
+| `@api/Settings` / `definePluginSettings` | Typed, persistent plugin settings |
+| `@api/Commands` | Register and unregister slash commands |
+| `@api/ContextMenu` | Patch context menu components |
+| `@api/ChatButtons` | Add buttons to the chat bar |
+| `@api/MessageAccessories` | Render below message content |
+| `@api/MessageDecorations` | Render inside the message bubble |
+| `@api/MessageEvents` | Intercept send/edit/click events |
+| `@api/MessagePopover` | Add buttons to the message popover |
+| `@api/MemberListDecorators` | Decorate member list entries |
+| `@api/Badges` | Register user profile badges |
+| `@api/Styles` | Enable and disable CSS stylesheets |
+| `@api/DataStore` | Persistent key-value storage |
+| `@api/Notifications` | Show native-style notifications |
+
+Common Discord internals (React, Flux, stores, components) are re-exported from `@webpack/common` so you can import them without touching the raw webpack runtime.
+
+## Built-in plugins vs. user plugins
+
+Vencord ships two categories of plugins:
+
+<CardGroup cols={2}>
+  <Card title="Built-in plugins" icon="box">
+    Located in `src/plugins/`. Reviewed and maintained by the Vencord team. Included in every Vencord build. Must follow all plugin rules and go through a pull request review.
+  </Card>
+  <Card title="User plugins" icon="user">
+    Located in `src/userplugins/`. Only compiled into your local build. Never submitted to the main repo. No review process — ideal for personal tools, experiments, and work-in-progress plugins.
+  </Card>
+</CardGroup>
+
+The plugin system treats both identically at runtime. The only difference is the source directory and whether the code is distributed publicly.
+
+<Note>
+  If you intend to submit a plugin to the Vencord repository, develop it in `src/userplugins/` first, then move it to `src/plugins/` when you are ready to open a pull request.
+</Note>
+
+## Plugin rules
+
+These rules apply to all plugins submitted to the Vencord repository. They are enforced during pull request review.
+
+<Warning>
+  Plugins that violate these rules will not be accepted regardless of quality.
+</Warning>
+
+- **No selfbot behaviour.** Do not automate actions on behalf of the user (auto-reply, message pruning, animated status, nitro sniper, etc.).
+- **No raw DOM manipulation.** Use patches and React instead of `document.querySelector` or `innerHTML`.
+- **No FakeDeafen, FakeMute, or StereoMic.**
+- **No simple slash command plugins** (e.g., `/cat`, `/dog`). Build a user-installable Discord bot instead.
+- **No simple text-replace plugins.** The built-in TextReplace plugin handles this.
+- **No UI-only hide/redesign plugins.** Use CSS themes for cosmetic changes.
+- **No plugins that target specific Discord bots** (official Discord apps like Watch Together are fine).
+- **No untrusted third-party APIs.** Well-known public services (Google, GitHub) are acceptable. Self-hosted endpoints are not.
+- **No plugins that require the user to supply an API key.**
+- **No new dependencies** unless the dependency is clearly necessary and well-justified.
+- **Check for prior art** before starting. Review open pull requests and the [plugin requests tracker](https://github.com/Vencord/plugin-requests/issues) to avoid duplicating work or building something that has already been rejected.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/plugins/quickstart">
+    Set up your dev environment and build your first plugin step by step.
+  </Card>
+  <Card title="Plugin structure" icon="sitemap" href="/plugins/plugin-structure">
+    Full reference for every field in the PluginDef interface.
+  </Card>
+</CardGroup>

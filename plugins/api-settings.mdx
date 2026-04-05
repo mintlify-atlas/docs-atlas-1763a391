@@ -1,0 +1,422 @@
+---
+title: "Settings API"
+description: "Define and access typed, persistent settings for your plugin using definePluginSettings."
+---
+
+The Settings API lets you declare a typed schema of user-configurable options that Vencord renders
+automatically in **Settings → Plugins → Your Plugin**. Values are persisted to disk and accessible
+anywhere in your plugin via a reactive store.
+
+## Defining settings
+
+Call `definePluginSettings` at module level and pass the result as the `settings` field inside
+`definePlugin`. Vencord connects the two and injects the plugin name before your plugin starts.
+
+```typescript
+import { definePluginSettings } from "@api/Settings";
+import { OptionType } from "@utils/types";
+import definePlugin from "@utils/types";
+
+const settings = definePluginSettings({
+    myToggle: {
+        type: OptionType.BOOLEAN,
+        description: "Enable the fancy feature",
+        default: true,
+    },
+    myText: {
+        type: OptionType.STRING,
+        description: "A label to display",
+        default: "Hello!",
+    },
+});
+
+export default definePlugin({
+    name: "MyPlugin",
+    description: "Does something cool",
+    authors: [],
+    settings, // <-- wire it in here
+});
+```
+
+<Warning>
+Do not access `settings.store` before the plugin is initialized. Vencord sets `pluginName`
+during plugin registration. If you access the store in module-level code (outside a function
+or lifecycle hook) you will get an error.
+</Warning>
+
+---
+
+## OptionType enum
+
+Every setting definition must include a `type` drawn from the `OptionType` enum.
+
+| Value | Description |
+|---|---|
+| `OptionType.STRING` | A plain text or multiline string input |
+| `OptionType.NUMBER` | A numeric input (integer or float) |
+| `OptionType.BIGINT` | A `BigInt` value (useful for Discord snowflake IDs) |
+| `OptionType.BOOLEAN` | A toggle switch |
+| `OptionType.SELECT` | A dropdown with fixed options |
+| `OptionType.SLIDER` | A range slider with discrete or continuous values |
+| `OptionType.COMPONENT` | A fully custom React component rendered in the settings page |
+| `OptionType.CUSTOM` | A hidden setting with no UI; managed entirely by your plugin |
+
+---
+
+## Common fields (PluginSettingCommon)
+
+All setting types except `CUSTOM` share these fields:
+
+<ParamField path="description" type="string" required>
+  Human-readable label shown in the settings UI.
+</ParamField>
+
+<ParamField path="placeholder" type="string">
+  Placeholder text for text inputs. Has no effect on non-text types.
+</ParamField>
+
+<ParamField path="onChange" type="(newValue: any) => void">
+  Callback invoked every time the user changes the setting. Receives the new value.
+</ParamField>
+
+<ParamField path="restartNeeded" type="boolean">
+  When `true`, Vencord shows a "Restart required" badge next to the setting after it is changed.
+  Default: `false`.
+</ParamField>
+
+<ParamField path="componentProps" type="Record<string, any>">
+  Additional props forwarded to the underlying UI component rendered for this setting.
+</ParamField>
+
+<ParamField path="hidden" type="boolean">
+  When `true`, the setting is not shown in the settings UI but is still stored and accessible via
+  `settings.store`. Useful for persisting internal plugin state.
+</ParamField>
+
+<ParamField path="target" type='"WEB" | "DESKTOP" | "BOTH"'>
+  Restrict the setting to a specific Vencord target. Settings that don't match the current target
+  are hidden from the UI. Default: `"BOTH"`.
+</ParamField>
+
+---
+
+## Setting types
+
+### PluginSettingStringDef
+
+A single-line or multiline text field.
+
+<ParamField path="type" type="OptionType.STRING" required>
+  Must be `OptionType.STRING`.
+</ParamField>
+
+<ParamField path="default" type="string">
+  Default value. Used when the setting has never been saved.
+</ParamField>
+
+<ParamField path="multiline" type="boolean">
+  When `true`, renders a `<textarea>` instead of a single-line `<input>`.
+</ParamField>
+
+```typescript
+apiKey: {
+    type: OptionType.STRING,
+    description: "DeepL API key",
+    default: "",
+    placeholder: "Get your API key from https://deepl.com/your-account",
+},
+```
+
+---
+
+### PluginSettingNumberDef
+
+A numeric input that accepts integers and floats.
+
+<ParamField path="type" type="OptionType.NUMBER" required>
+  Must be `OptionType.NUMBER`.
+</ParamField>
+
+<ParamField path="default" type="number">
+  Default numeric value.
+</ParamField>
+
+```typescript
+checkInterval: {
+    type: OptionType.NUMBER,
+    description: "How often to check for new sessions (minutes)",
+    default: 20,
+    restartNeeded: true,
+},
+```
+
+---
+
+### PluginSettingBigIntDef
+
+A `BigInt` field, most commonly used to store Discord snowflake IDs.
+
+<ParamField path="type" type="OptionType.BIGINT" required>
+  Must be `OptionType.BIGINT`.
+</ParamField>
+
+<ParamField path="default" type="BigInt">
+  Default `BigInt` value.
+</ParamField>
+
+```typescript
+userId: {
+    type: OptionType.BIGINT,
+    description: "Target user's Discord snowflake ID",
+},
+```
+
+---
+
+### PluginSettingBooleanDef
+
+A toggle switch rendered as a checkbox or switch in the settings UI.
+
+<ParamField path="type" type="OptionType.BOOLEAN" required>
+  Must be `OptionType.BOOLEAN`.
+</ParamField>
+
+<ParamField path="default" type="boolean">
+  Default value. Defaults to `false` if omitted.
+</ParamField>
+
+```typescript
+autoTranslate: {
+    type: OptionType.BOOLEAN,
+    description: "Automatically translate messages before sending",
+    default: false,
+},
+```
+
+---
+
+### PluginSettingSelectDef
+
+A dropdown with a fixed set of labeled options.
+
+<ParamField path="type" type="OptionType.SELECT" required>
+  Must be `OptionType.SELECT`.
+</ParamField>
+
+<ParamField path="options" type="readonly PluginSettingSelectOption[]" required>
+  Array of choices.
+
+  <Expandable title="PluginSettingSelectOption">
+    <ResponseField name="label" type="string">
+      Human-readable text shown in the dropdown.
+    </ResponseField>
+    <ResponseField name="value" type="string | number | boolean">
+      The stored value when this option is selected.
+    </ResponseField>
+    <ResponseField name="default" type="boolean">
+      Mark exactly one option as `true` to use it as the default selection.
+    </ResponseField>
+  </Expandable>
+</ParamField>
+
+```typescript
+service: {
+    type: OptionType.SELECT,
+    description: "Translation service",
+    options: [
+        { label: "Google Translate", value: "google", default: true },
+        { label: "DeepL Free",       value: "deepl" },
+        { label: "DeepL Pro",        value: "deepl-pro" },
+    ] as const,
+    onChange: resetLanguageDefaults,
+},
+```
+
+<Note>
+  Mark exactly one option with `default: true`. If you mark none, the setting has no default.
+  If you mark multiple, behaviour is undefined.
+</Note>
+
+---
+
+### PluginSettingSliderDef
+
+A slider that snaps to (or slides between) numeric markers.
+
+<ParamField path="type" type="OptionType.SLIDER" required>
+  Must be `OptionType.SLIDER`.
+</ParamField>
+
+<ParamField path="markers" type="number[]" required>
+  All allowable positions on the slider. Must contain at least two values.
+  Use the `makeRange(start, end, step)` helper from `@utils/types` to generate a range.
+</ParamField>
+
+<ParamField path="default" type="number" required>
+  The initial value. Should be one of the values in `markers`.
+</ParamField>
+
+<ParamField path="stickToMarkers" type="boolean">
+  When `false`, the user can drag to any value between markers (continuous).
+  When `true` (or omitted), the slider snaps to the nearest marker.
+</ParamField>
+
+```typescript
+import { makeRange } from "@utils/types";
+
+volume: {
+    type: OptionType.SLIDER,
+    description: "Notification volume",
+    markers: makeRange(0, 100, 10), // [0, 10, 20, ..., 100]
+    default: 50,
+    stickToMarkers: false,
+},
+```
+
+---
+
+### PluginSettingComponentDef
+
+Renders a fully custom React component in the settings page. Use this when none of the other
+types can express the UI you need.
+
+<ParamField path="type" type="OptionType.COMPONENT" required>
+  Must be `OptionType.COMPONENT`.
+</ParamField>
+
+<ParamField path="component" type="(props: IPluginOptionComponentProps) => ReactNode">
+  Your React component. Receives a `setValue(newValue)` function and the option definition via
+  `props.option`.
+</ParamField>
+
+```typescript
+colorPicker: {
+    type: OptionType.COMPONENT,
+    component: ({ setValue, option }) => (
+        <input
+            type="color"
+            onChange={e => setValue(e.target.value)}
+        />
+    ),
+},
+```
+
+---
+
+## Accessing settings
+
+### settings.store
+
+A reactive proxy of your plugin's settings object. Reading from it returns the current value
+(falling back to the declared `default`). Writing to it persists the change to disk and notifies
+listeners immediately.
+
+```typescript
+// Read
+const currentService = settings.store.service; // "google" | "deepl" | "deepl-pro"
+
+// Write — saved to disk automatically
+settings.store.autoTranslate = true;
+```
+
+<Warning>
+Mutating `settings.store` outside of a user interaction (for example in a loop or on every
+message) can trigger excessive disk writes. Batch your writes where possible.
+</Warning>
+
+---
+
+### settings.use() — React hook
+
+Use `settings.use()` inside React components to subscribe to setting changes and re-render
+automatically. Optionally pass an array of key names to narrow the subscription and avoid
+unnecessary re-renders.
+
+```typescript
+function MyComponent() {
+    // Re-renders whenever `isEnabled` or `showIcon` changes
+    const { isEnabled, showIcon } = settings.use(["isEnabled", "showIcon"]);
+
+    return <div>{isEnabled ? "On" : "Off"}</div>;
+}
+```
+
+Omit the filter to subscribe to all settings for this plugin:
+
+```typescript
+const allSettings = settings.use();
+```
+
+---
+
+## Private settings
+
+Call `.withPrivateSettings<T>()` to attach plugin-internal state that is stored alongside
+settings but never shown in the UI.
+
+```typescript
+export const settings = definePluginSettings({
+    service: {
+        type: OptionType.SELECT,
+        description: "Translation service",
+        options: [
+            { label: "Google Translate", value: "google", default: true },
+        ] as const,
+    },
+}).withPrivateSettings<{
+    showAutoTranslateAlert: boolean;
+}>();
+
+// Later, access private state via store:
+settings.store.showAutoTranslateAlert = false;
+```
+
+---
+
+## Full example — Translate plugin settings
+
+This is the real settings definition from the built-in `Translate` plugin
+(`src/plugins/translate/settings.ts`):
+
+```typescript
+import { definePluginSettings } from "@api/Settings";
+import { OptionType } from "@utils/types";
+
+export const settings = definePluginSettings({
+    receivedInput: {
+        type: OptionType.STRING,
+        description: "Language that received messages should be translated from",
+        default: "auto",
+        hidden: true,
+    },
+    receivedOutput: {
+        type: OptionType.STRING,
+        description: "Language that received messages should be translated to",
+        default: "en",
+        hidden: true,
+    },
+    service: {
+        type: OptionType.SELECT,
+        description: "Translation service",
+        options: [
+            { label: "Google Translate", value: "google", default: true },
+            { label: "DeepL Free",       value: "deepl" },
+            { label: "DeepL Pro",        value: "deepl-pro" },
+        ] as const,
+        onChange: resetLanguageDefaults,
+    },
+    deeplApiKey: {
+        type: OptionType.STRING,
+        description: "DeepL API key",
+        default: "",
+        placeholder: "Get your API key from https://deepl.com/your-account",
+    },
+    autoTranslate: {
+        type: OptionType.BOOLEAN,
+        description: "Automatically translate your messages before sending",
+        default: false,
+    },
+}).withPrivateSettings<{
+    showAutoTranslateAlert: boolean;
+}>();
+```

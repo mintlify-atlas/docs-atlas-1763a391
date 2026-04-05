@@ -1,0 +1,121 @@
+---
+title: "Browser Extension"
+description: "Run Vencord in Chrome or Firefox using the Vencord Web browser extension, or use the UserScript alternative for any UserScript-capable browser."
+---
+
+Vencord Web is the browser version of Vencord. It runs entirely inside your browser and requires no modification to the Discord desktop app. You get most of the same plugins and features as the desktop version, loaded automatically whenever you open `discord.com`.
+
+<Info>
+  The browser extension is built from the same source as the desktop version. The entry point is `browser/Vencord.ts`, which is compiled into `dist/Vencord.js` and injected into Discord pages as a content script.
+</Info>
+
+## What works in browser mode
+
+Most Vencord plugins work in the browser. The main limitations compared to the desktop version are:
+
+- **No native desktop integration** — features that rely on Electron or Node.js (such as window transparency, native title bars, or local file access for themes) are not available.
+- **Theme file imports from disk** are not supported — use CSS links or paste CSS directly into the editor instead.
+- **Auto-update** is managed by your browser's extension update mechanism, not the Vencord Updater tab.
+- **Settings sync** via the Vencord cloud API works the same as desktop.
+
+## Install the browser extension
+
+<Tabs>
+  <Tab title="Chrome">
+    The Chrome extension uses **Manifest V3** and requires Chrome 111 or later (or any Chromium-based browser at an equivalent version, such as Edge or Brave).
+
+    <Steps>
+      <Step title="Go to the download page">
+        Visit [vencord.dev/download](https://vencord.dev/download) and click **Download for Chrome** to get the latest packaged extension (`.zip` file).
+      </Step>
+      <Step title="Open the Extensions page">
+        In Chrome, navigate to `chrome://extensions`. Enable **Developer mode** using the toggle in the top-right corner.
+      </Step>
+      <Step title="Load the extension">
+        Click **Load unpacked** and select the unzipped extension folder. The Vencord Web icon will appear in your browser toolbar.
+      </Step>
+      <Step title="Open Discord">
+        Navigate to [discord.com](https://discord.com). Vencord loads automatically. Open **User Settings** in Discord to find the **Vencord** section in the sidebar.
+      </Step>
+    </Steps>
+
+    <Tip>
+      You can also install Vencord Web from the Chrome Web Store if a published listing is available. Check [vencord.dev/download](https://vencord.dev/download) for the current store link.
+    </Tip>
+  </Tab>
+  <Tab title="Firefox">
+    The Firefox extension uses **Manifest V2** and requires Firefox 128 or later. It is packaged separately because Firefox does not support Manifest V3 in the same way as Chromium.
+
+    <Steps>
+      <Step title="Go to the download page">
+        Visit [vencord.dev/download](https://vencord.dev/download) and click **Download for Firefox** to get the Firefox-specific extension file (`.xpi`).
+      </Step>
+      <Step title="Install the extension">
+        Open the downloaded `.xpi` file in Firefox. A prompt will ask you to confirm the installation. Click **Add**.
+
+        Alternatively, navigate to `about:addons`, click the gear icon, and choose **Install Add-on From File**, then select the `.xpi`.
+      </Step>
+      <Step title="Open Discord">
+        Navigate to [discord.com](https://discord.com). Vencord loads automatically and injects into the page. Open Discord settings to find the **Vencord** section.
+      </Step>
+    </Steps>
+
+    <Note>
+      The Firefox extension is identified by the extension ID `vencord-firefox@vendicated.dev` and requires `strict_min_version` of 128.0. Older Firefox versions are not supported.
+    </Note>
+  </Tab>
+</Tabs>
+
+## How the extension works
+
+The extension consists of three main scripts, all located in the `browser/` directory of the Vencord source:
+
+| File | Role |
+|---|---|
+| `content.js` | Runs in an isolated world at `document_start`. Bridges the isolated extension context with the main page world. |
+| `Vencord.ts` (compiled to `dist/Vencord.js`) | The main Vencord bundle, injected directly into Discord's page JavaScript context (`world: MAIN`). |
+| `background.js` | Handles `webRequest`/`declarativeNetRequest` rules. Used to modify response headers so Discord's Content Security Policy does not block injected scripts. |
+
+The Chrome extension uses `declarativeNetRequest` (Manifest V3) to modify headers, while the Firefox extension uses `webRequest` with `webRequestBlocking` (Manifest V2).
+
+## UserScript alternative
+
+If you prefer not to install a browser extension, you can run Vencord as a **UserScript** using a UserScript manager. This works in any browser that supports the UserScript API.
+
+### Compatible managers
+
+| Browser | Supported managers |
+|---|---|
+| Chrome / Chromium | Tampermonkey, Violentmonkey |
+| Firefox | Tampermonkey only (see note below) |
+| Edge | Tampermonkey, Violentmonkey |
+| Opera | Tampermonkey, Violentmonkey |
+| Safari | Tampermonkey |
+
+<Warning>
+  The Vencord UserScript **does not work on Firefox with Violentmonkey or Greasemonkey**. A bug in those managers prevents overwriting properties on `window` on pages that use a Content Security Policy. Use Tampermonkey on Firefox, or switch to the browser extension instead.
+</Warning>
+
+### Installing the UserScript
+
+<Steps>
+  <Step title="Install a UserScript manager">
+    Install Tampermonkey (or Violentmonkey for non-Firefox browsers) from your browser's extension store.
+  </Step>
+  <Step title="Download the UserScript">
+    Visit [vencord.dev/download](https://vencord.dev/download) and click **Download UserScript**. Your UserScript manager will detect the `.user.js` file and prompt you to install it.
+  </Step>
+  <Step title="Confirm the installation">
+    Review the permissions requested by the script — it requires `GM_xmlhttpRequest` to fetch resources and `unsafeWindow` to inject into Discord's page context — then click **Install**.
+  </Step>
+  <Step title="Open Discord">
+    Navigate to [discord.com](https://discord.com). The UserScript runs at `document-start` and injects Vencord before Discord's own scripts load.
+  </Step>
+</Steps>
+
+The UserScript metadata is defined in `browser/userscript.meta.js` and targets `*://*.discord.com/*`. It is a compiled, minified build of the same Vencord source used by the browser extension.
+
+## Updating the extension or UserScript
+
+- **Browser extension** — Updates are distributed through the same channel you used to install (store or manual). For manually loaded unpacked extensions, download the new release and replace the files in your extension folder.
+- **UserScript** — Tampermonkey and Violentmonkey can auto-update UserScripts. You can also trigger a manual update from the manager's dashboard by clicking **Check for updates** on the Vencord entry.

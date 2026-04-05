@@ -1,0 +1,413 @@
+---
+title: "Message Events API"
+description: "Intercept outgoing messages before they are sent or edited, listen to message clicks, add action buttons to message popovers, and attach accessories below messages."
+---
+
+The Message Events API covers four related surfaces: intercepting outgoing messages before they are sent or edited, listening for message clicks, adding buttons to the message hover toolbar (popover), and rendering custom content below messages (accessories).
+
+## Dependencies
+
+Intercepting send and edit events requires the `MessageEventsAPI` internal plugin. Declare it in your plugin's `dependencies` array:
+
+```typescript
+export default definePlugin({
+    name: "MyPlugin",
+    dependencies: ["MessageEventsAPI"],
+    // ...
+});
+```
+
+<Note>
+  The `MessageEventsAPI` dependency is only needed for `onBeforeMessageSend` and `onBeforeMessageEdit`. Message click listeners, popover buttons, and message accessories do not require it.
+</Note>
+
+---
+
+## Pre-send interception
+
+### `onBeforeMessageSend` shorthand
+
+The quickest way to intercept outgoing messages is the `onBeforeMessageSend` field in your `definePlugin` call:
+
+```typescript
+export default definePlugin({
+    name: "MyPlugin",
+    dependencies: ["MessageEventsAPI"],
+
+    async onBeforeMessageSend(channelId, messageObj, options) {
+        // Prepend a prefix to every message
+        messageObj.content = "[prefix] " + messageObj.content;
+    }
+});
+```
+
+### `MessageSendListener` type
+
+```typescript
+type MessageSendListener = (
+    channelId: string,
+    messageObj: MessageObject,
+    options: MessageOptions
+) => Promisable<void | { cancel: boolean }>;
+```
+
+<ParamField path="channelId" type="string" required>
+  The id of the channel the message is being sent to.
+</ParamField>
+
+<ParamField path="messageObj" type="MessageObject" required>
+  The message being sent. Mutate `messageObj.content` to change the text before it is delivered.
+
+  ```typescript
+  interface MessageObject {
+      content: string;
+      validNonShortcutEmojis: CustomEmoji[];
+      invalidEmojis: any[];
+      tts: boolean;
+  }
+  ```
+</ParamField>
+
+<ParamField path="options" type="MessageOptions" required>
+  Extended options including the channel, sticker ids, file uploads, and reply options.
+
+  ```typescript
+  interface MessageOptions {
+      content: string;
+      channel: Channel;
+      stickers?: string[];
+      uploads?: CloudUpload[];
+      replyOptions: MessageReplyOptions;
+      openWarningPopout: (props: any) => any;
+  }
+  ```
+</ParamField>
+
+<ResponseField name="return" type="void | { cancel: boolean }">
+  Return `{ cancel: true }` to abort sending the message entirely. Return `void` or `{ cancel: false }` to allow it.
+</ResponseField>
+
+### `addMessagePreSendListener` / `removeMessagePreSendListener`
+
+Register or remove a send listener manually:
+
+```typescript
+import { addMessagePreSendListener, removeMessagePreSendListener } from "@api/MessageEvents";
+
+const listener: MessageSendListener = async (channelId, msg) => {
+    msg.content = msg.content.replace(/badword/gi, "***");
+};
+
+export default definePlugin({
+    start() { addMessagePreSendListener(listener); },
+    stop()  { removeMessagePreSendListener(listener); }
+});
+```
+
+<Warning>
+  If any listener returns `{ cancel: true }`, the message is dropped and subsequent listeners are **not** called. Order of execution is insertion order.
+</Warning>
+
+### Cancelling a message
+
+Return `{ cancel: true }` from your listener to stop the message from being sent:
+
+```typescript
+async onBeforeMessageSend(channelId, messageObj) {
+    if (messageObj.content.includes("forbidden")) {
+        return { cancel: true };
+    }
+}
+```
+
+---
+
+## Pre-edit interception
+
+### `onBeforeMessageEdit` shorthand
+
+```typescript
+export default definePlugin({
+    name: "MyPlugin",
+    dependencies: ["MessageEventsAPI"],
+
+    async onBeforeMessageEdit(channelId, messageId, messageObj) {
+        messageObj.content = messageObj.content.toUpperCase();
+    }
+});
+```
+
+### `MessageEditListener` type
+
+```typescript
+type MessageEditListener = (
+    channelId: string,
+    messageId: string,
+    messageObj: MessageObject
+) => Promisable<void | { cancel: boolean }>;
+```
+
+<ParamField path="channelId" type="string" required>
+  The id of the channel containing the message being edited.
+</ParamField>
+
+<ParamField path="messageId" type="string" required>
+  The id of the message being edited.
+</ParamField>
+
+<ParamField path="messageObj" type="MessageObject" required>
+  The new message content object. Mutate `messageObj.content` to change the text before the edit is applied.
+</ParamField>
+
+<ResponseField name="return" type="void | { cancel: boolean }">
+  Return `{ cancel: true }` to abort the edit. Return `void` to allow it.
+</ResponseField>
+
+### `addMessagePreEditListener` / `removeMessagePreEditListener`
+
+```typescript
+import { addMessagePreEditListener, removeMessagePreEditListener } from "@api/MessageEvents";
+```
+
+Usage mirrors the send listener functions.
+
+---
+
+## Message click listener
+
+Listen for clicks on messages in the chat. No dependency declaration is required.
+
+### `onMessageClick` shorthand
+
+```typescript
+export default definePlugin({
+    onMessageClick(message, channel, event) {
+        console.log("Clicked message", message.id, "in channel", channel.id);
+    }
+});
+```
+
+### `MessageClickListener` type
+
+```typescript
+type MessageClickListener = (
+    message: Message,
+    channel: Channel,
+    event: MouseEvent
+) => void;
+```
+
+<ParamField path="message" type="Message" required>
+  The message that was clicked. Vencord fetches the latest version from the message store, so this is up-to-date even if the in-memory object was stale.
+</ParamField>
+
+<ParamField path="channel" type="Channel" required>
+  The channel containing the clicked message.
+</ParamField>
+
+<ParamField path="event" type="MouseEvent" required>
+  The DOM mouse event that triggered the click.
+</ParamField>
+
+### `addMessageClickListener` / `removeMessageClickListener`
+
+```typescript
+import { addMessageClickListener, removeMessageClickListener } from "@api/MessageEvents";
+```
+
+---
+
+## Message Popover API
+
+The message popover is the row of action buttons (React, Reply, Edit, …) that appears when you hover over a message. You can add your own button to this toolbar.
+
+### `messagePopoverButton` shorthand
+
+```typescript
+import { CopyIcon } from "@components/Icons";
+
+export default definePlugin({
+    messagePopoverButton: {
+        icon: CopyIcon,
+        render(message) {
+            return {
+                label: "View Raw",
+                icon: CopyIcon,
+                message,
+                channel: ChannelStore.getChannel(message.channel_id),
+                onClick: () => openViewRawModal(message),
+            };
+        }
+    }
+});
+```
+
+### `MessagePopoverButtonData`
+
+```typescript
+type MessagePopoverButtonData = {
+    render: MessagePopoverButtonFactory;
+    icon: IconComponent;
+};
+
+type MessagePopoverButtonFactory = (message: Message) => MessagePopoverButtonItem | null;
+```
+
+<ParamField path="render" type="MessagePopoverButtonFactory" required>
+  Called for each message when its popover is shown. Return a `MessagePopoverButtonItem` to display the button, or `null` to hide it for this message.
+</ParamField>
+
+<ParamField path="icon" type="IconComponent" required>
+  The icon shown in the Vencord Settings UI for toggling this button. Your `render` function must still return its own icon — this field is only used by Settings.
+</ParamField>
+
+### `MessagePopoverButtonItem`
+
+```typescript
+interface MessagePopoverButtonItem {
+    key?: string;
+    label: string;
+    icon: ComponentType<any>;
+    message: Message;
+    channel: Channel;
+    onClick?: MouseEventHandler<HTMLButtonElement>;
+    onContextMenu?: MouseEventHandler<HTMLButtonElement>;
+}
+```
+
+<ParamField path="label" type="string" required>
+  Tooltip text shown on the button.
+</ParamField>
+
+<ParamField path="icon" type="ComponentType" required>
+  The icon component to render inside the button.
+</ParamField>
+
+<ParamField path="message" type="Message" required>
+  The message the button is attached to. Pass the message received by `render`.
+</ParamField>
+
+<ParamField path="channel" type="Channel" required>
+  The channel containing the message. Retrieve with `ChannelStore.getChannel(message.channel_id)`.
+</ParamField>
+
+<ParamField path="onClick" type="MouseEventHandler">
+  Handler for a left-click on the button.
+</ParamField>
+
+<ParamField path="onContextMenu" type="MouseEventHandler">
+  Handler for a right-click on the button.
+</ParamField>
+
+### `addMessagePopoverButton` / `removeMessagePopoverButton`
+
+```typescript
+import {
+    addMessagePopoverButton,
+    removeMessagePopoverButton,
+    MessagePopoverButtonFactory
+} from "@api/MessagePopover";
+
+const myButton: MessagePopoverButtonFactory = message => ({
+    label: "Inspect",
+    icon: InspectIcon,
+    message,
+    channel: ChannelStore.getChannel(message.channel_id),
+    onClick: () => inspect(message),
+});
+
+export default definePlugin({
+    start() { addMessagePopoverButton("my-plugin-inspect", myButton, InspectIcon); },
+    stop()  { removeMessagePopoverButton("my-plugin-inspect"); }
+});
+```
+
+The `identifier` string must be unique across all plugins.
+
+---
+
+## Message Accessories API
+
+Message accessories are arbitrary React nodes rendered below a message, beneath the message content and embeds. Use them to attach rich UI such as previews, metadata panels, or inline controls.
+
+### `renderMessageAccessory` shorthand
+
+```typescript
+export default definePlugin({
+    renderMessageAccessory(props) {
+        const { message } = props;
+        if (!message.content.startsWith("!preview")) return null;
+        return <MyPreviewComponent message={message} />;
+    }
+});
+```
+
+### `MessageAccessoryFactory` type
+
+```typescript
+type MessageAccessoryFactory = (props: Record<string, any>) => ReactNode;
+```
+
+The `props` object contains at minimum a `message` property (`Message`) and a `channel` property (`Channel`), plus internal Discord render props.
+
+### `addMessageAccessory` / `removeMessageAccessory`
+
+```typescript
+import { addMessageAccessory, removeMessageAccessory } from "@api/MessageAccessories";
+
+export default definePlugin({
+    start() {
+        addMessageAccessory(
+            "my-plugin-accessory",
+            props => <MyAccessory message={props.message} />,
+            /* position */ 0   // optional; omit to append at the end
+        );
+    },
+    stop() {
+        removeMessageAccessory("my-plugin-accessory");
+    }
+});
+```
+
+<ParamField path="identifier" type="string" required>
+  Unique key for this accessory. Used to remove it later.
+</ParamField>
+
+<ParamField path="render" type="MessageAccessoryFactory" required>
+  Factory function that receives message props and returns a React node, or `null`/`undefined` to render nothing.
+</ParamField>
+
+<ParamField path="position" type="number">
+  Insertion index in the accessories list. Negative values count from the end (e.g. `-1` inserts before the last item). Omit to append.
+</ParamField>
+
+---
+
+## Real-world example — ViewRaw
+
+The `ViewRaw` plugin combines a message popover button with context menus. Its popover button opens a modal or copies the raw message content depending on click vs. right-click:
+
+```typescript
+export default definePlugin({
+    messagePopoverButton: {
+        icon: CopyIcon,
+        render(msg) {
+            const handleClick = () => openViewRawModalMessage(msg);
+            const handleContextMenu = e => {
+                e.preventDefault();
+                e.stopPropagation();
+                copyWithToast(msg.content);
+            };
+
+            return {
+                label: "View Raw (Left Click) / Copy Raw (Right Click)",
+                icon: CopyIcon,
+                message: msg,
+                channel: ChannelStore.getChannel(msg.channel_id),
+                onClick: handleClick,
+                onContextMenu: handleContextMenu,
+            };
+        }
+    }
+});
+```

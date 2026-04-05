@@ -1,0 +1,220 @@
+---
+title: "Troubleshooting"
+description: "Solutions to common Vencord problems, from installation issues to plugin failures and cloud sync errors."
+---
+
+<Note>
+  Before troubleshooting, always update Vencord first. Many issues are caused by an outdated build and are already fixed upstream. Go to **User Settings → Vencord → Updater** and click **Check for Updates**.
+</Note>
+
+## Common issues
+
+### Vencord not loading or not appearing in settings
+
+If Discord launches but there is no Vencord section in **User Settings**, Vencord was not injected successfully.
+
+<Steps>
+  <Step title="Confirm the installation">
+    Re-run the [Vencord installer](https://vencord.dev/download). Make sure you select the correct Discord branch (Stable, Canary, or PTB) and click **Install**.
+  </Step>
+  <Step title="Fully quit Discord">
+    Discord must be fully closed before the installer can patch it. On Windows, right-click the tray icon and choose **Quit Discord**. On macOS, use **Quit** from the menu bar or Cmd+Q.
+  </Step>
+  <Step title="Re-run the installer">
+    After Discord is closed, run the installer again and reinstall. Launch Discord afterward and check if the Vencord section appears.
+  </Step>
+  <Step title="Check for antivirus interference">
+    Some antivirus software quarantines or blocks the patched Discord files. Add an exclusion for the Discord application directory and retry.
+  </Step>
+</Steps>
+
+<Warning>
+  If you are using an externally packaged version of Vencord (such as a Linux distro package), Vencord's built-in support team cannot provide support for it. Contact the package maintainer instead.
+</Warning>
+
+---
+
+### A plugin stopped working after a Discord update
+
+Discord updates can break patches that plugins rely on. This is expected and usually resolved quickly.
+
+<Steps>
+  <Step title="Update Vencord">
+    Go to **User Settings → Vencord → Updater**. Click **Check for Updates**. If an update is available, click **Update** and restart Discord. Broken plugins are typically fixed within 12 hours of a Discord update.
+  </Step>
+  <Step title="Check the known issues channel">
+    Join the [Vencord Discord server](https://discord.gg/D9uwnFnqmd) and look in `#known-issues` to see if your plugin issue is already being tracked.
+  </Step>
+  <Step title="Disable the plugin temporarily">
+    Go to **User Settings → Vencord → Plugins**, find the plugin, and toggle it off. This lets you continue using Discord while waiting for a fix.
+  </Step>
+  <Step title="Report the bug">
+    If the issue is not listed in known issues and persists after updating, open a bug report on [GitHub Issues](https://github.com/Vendicated/Vencord/issues) with your Vencord version and steps to reproduce.
+  </Step>
+</Steps>
+
+---
+
+### Discord crashes on startup after installing Vencord
+
+<Steps>
+  <Step title="Start Discord in safe mode">
+    Hold **Shift** while launching Discord (Windows/Linux) to skip loading Vencord temporarily. If Discord opens successfully, the issue is with a specific plugin.
+  </Step>
+  <Step title="Disable all plugins">
+    Go to **User Settings → Vencord → Plugins** and disable all plugins. Re-enable them one at a time to identify the culprit.
+  </Step>
+  <Step title="Check the last crash reason">
+    Vencord's debug info includes the last crash reason from the Discord native layer. Run `/vencord-debug` in a support channel to include this in your report.
+  </Step>
+  <Step title="Reinstall Vencord">
+    Run the installer, choose **Uninstall**, relaunch Discord once to confirm it works cleanly, then reinstall Vencord.
+  </Step>
+</Steps>
+
+---
+
+### Custom CSS not applying
+
+<Steps>
+  <Step title="Confirm Quick CSS is enabled">
+    Go to **User Settings → Vencord** and make sure the **Enable Quick CSS** toggle is on. This corresponds to the `useQuickCss` setting.
+  </Step>
+  <Step title="Check the CSS editor">
+    Go to **User Settings → Vencord → Quick CSS** and confirm your CSS is present in the editor and has no syntax errors.
+  </Step>
+  <Step title="Check theme links">
+    If you're importing an external theme via a URL, go to **Themes** and verify the link is correct and the server is reachable. URLs must point to a raw `.css` file, not an HTML page.
+  </Step>
+  <Step title="Inspect for conflicts">
+    Open DevTools (Ctrl+Shift+I) and inspect the element. Another rule with higher specificity may be overriding yours. Try adding `!important` to critical declarations to test.
+  </Step>
+</Steps>
+
+---
+
+### Settings not saving or being reset on restart
+
+<Steps>
+  <Step title="Check file permissions">
+    Vencord stores settings in a JSON file on disk. If the process lacks write access to the Discord application data directory, settings cannot be saved. Check and fix directory permissions.
+  </Step>
+  <Step title="Disable conflicting software">
+    Some system tools (sandboxes, read-only overlays, cloud sync tools applied to the wrong directory) can block writes. Temporarily disable them and test.
+  </Step>
+  <Step title="Look for error messages in DevTools">
+    Open DevTools (Ctrl+Shift+I) and switch to the **Console** tab. Filter by "Settings" to look for save errors.
+  </Step>
+  <Step title="Reinstall Vencord">
+    As a last resort, uninstall and reinstall Vencord via the installer. Your Discord account data is unaffected.
+  </Step>
+</Steps>
+
+---
+
+### Cloud sync not working
+
+Vencord's cloud settings sync is opt-in and requires authentication with the Vencord cloud service.
+
+<Steps>
+  <Step title="Confirm cloud sync is enabled">
+    Go to **User Settings → Vencord → Cloud**. Ensure **Settings Sync** is toggled on. This maps to the `cloud.settingsSync` setting. The `cloud.authenticated` value must also be `true`.
+  </Step>
+  <Step title="Re-authenticate">
+    On the **Cloud** settings page, click **Log Out** (if available) and sign in again to refresh your session.
+  </Step>
+  <Step title="Check the cloud URL">
+    The default cloud endpoint is `https://api.vencord.dev/`. If you've changed the `cloud.url` setting to a self-hosted instance, confirm that instance is reachable.
+  </Step>
+  <Step title="Sync manually">
+    Use the **Sync to Cloud** or **Sync from Cloud** buttons on the Cloud settings page to force a sync and see if an error is displayed.
+  </Step>
+</Steps>
+
+<Info>
+  Cloud sync stores your plugin settings and enabled state. It does not sync Quick CSS or theme files.
+</Info>
+
+---
+
+### Browser extension not working
+
+<Steps>
+  <Step title="Check extension permissions">
+    The Vencord browser extension requires permission to run on `discord.com`. Open your browser's extension manager, find Vencord, and confirm site access is granted.
+  </Step>
+  <Step title="Use the web version of Discord">
+    The extension only works on [discord.com](https://discord.com) — not in the desktop app. Open Discord in your browser.
+  </Step>
+  <Step title="Reload the extension">
+    In your browser's extension manager, disable and re-enable the Vencord extension. Then hard-refresh Discord (Ctrl+Shift+R).
+  </Step>
+  <Step title="Check for browser updates">
+    Manifest V3 changes in Chromium-based browsers can affect extension behaviour. Make sure your browser is up to date.
+  </Step>
+  <Step title="Reinstall the extension">
+    Remove the extension, download the latest version from [vencord.dev/download](https://vencord.dev/download), and reinstall it.
+  </Step>
+</Steps>
+
+---
+
+### How to check for updates and force update
+
+Vencord checks for updates automatically on launch. The `autoUpdate` setting defaults to `true`, and `autoUpdateNotification` defaults to `true` — so you'll be notified when an update is applied.
+
+To check manually and force an update:
+
+<Steps>
+  <Step title="Open the Updater">
+    Go to **User Settings → Vencord → Updater**.
+  </Step>
+  <Step title="Check for updates">
+    Click **Check for Updates**. Vencord will contact GitHub and report whether your build is current.
+  </Step>
+  <Step title="Apply the update">
+    If an update is available, click **Update**. Vencord will download and rebuild in the background.
+  </Step>
+  <Step title="Restart Discord">
+    After the update completes, click **Restart** or close and reopen Discord to load the new version.
+  </Step>
+</Steps>
+
+<Tip>
+  When you open a support channel in the Vencord Discord server, Vencord automatically checks if your build is outdated and prompts you to update before proceeding. This prevents stale-build support requests.
+</Tip>
+
+---
+
+## Getting support
+
+If the steps above didn't resolve your issue, the Vencord community is here to help.
+
+<CardGroup cols={2}>
+  <Card title="Discord support server" icon="discord" href="https://discord.gg/D9uwnFnqmd">
+    Join the official Vencord server and open a thread in the support category. Run `/vencord-debug` when prompted to share diagnostic info automatically.
+  </Card>
+  <Card title="GitHub Issues" icon="github" href="https://github.com/Vendicated/Vencord/issues">
+    Report reproducible bugs on GitHub. Include your Vencord version, Discord branch, operating system, and steps to reproduce.
+  </Card>
+</CardGroup>
+
+<Warning>
+  Do not DM plugin developers or contributors directly for support. Always use the support channels in the Discord server. Developers shown in a DM warning card are not personal support agents.
+</Warning>
+
+### What to include in a bug report
+
+A good bug report helps the team reproduce and fix the issue faster. Include:
+
+- **Vencord version** — visible in **Settings → Vencord**, or use `/vencord-debug`
+- **Discord branch** — Stable, Canary, or PTB
+- **Client** — Discord Desktop, Vesktop, browser extension, or UserScript
+- **Operating system** — Windows, macOS, or Linux (with distribution)
+- **Steps to reproduce** — what you did, what you expected, what actually happened
+- **Enabled plugins** — use `/vencord-plugins` to generate a list
+- **Last crash reason** — included automatically in `/vencord-debug` output on desktop
+
+<Note>
+  Only official Vencord builds are supported. If you compiled Vencord from source or use a custom build, you will need to resolve issues yourself or switch to an [official build](https://vencord.dev/download).
+</Note>

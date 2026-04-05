@@ -1,0 +1,261 @@
+---
+title: "Chat Buttons API"
+description: "Add custom icon buttons to Discord's chat input bar using the Chat Buttons API."
+---
+
+The Chat Buttons API lets your plugin render an icon button in the row of buttons to the right of the chat input (alongside the emoji picker, GIF button, and sticker button). Users can toggle individual chat bar buttons on and off from the right-click context menu of the chat input.
+
+## The `chatBarButton` shorthand
+
+Use the `chatBarButton` field in your `definePlugin` call to register a single button. Vencord registers it when the plugin starts and removes it when the plugin stops.
+
+```typescript
+import { ChatBarButton, ChatBarButtonFactory } from "@api/ChatButtons";
+
+const MyButton: ChatBarButtonFactory = ({ isMainChat }) => {
+    if (!isMainChat) return null;
+
+    return (
+        <ChatBarButton tooltip="My Action" onClick={() => doMyAction()}>
+            <MyIcon />
+        </ChatBarButton>
+    );
+};
+
+export default definePlugin({
+    name: "MyPlugin",
+    description: "...",
+    authors: [],
+
+    chatBarButton: {
+        icon: MyIcon,
+        render: MyButton,
+    },
+});
+```
+
+## `ChatBarButtonData`
+
+```typescript
+type ChatBarButtonData = {
+    render: ChatBarButtonFactory;
+    icon: IconComponent;
+};
+```
+
+<ParamField path="render" type="ChatBarButtonFactory" required>
+  The factory component that renders your button. It receives `ChatBarProps` plus two extra booleans and must return a JSX element or `null`.
+</ParamField>
+
+<ParamField path="icon" type="IconComponent" required>
+  The icon displayed in the Vencord Settings UI for toggling this button. Your `render` function must still render its own icon — this field is used only by Settings.
+</ParamField>
+
+## `ChatBarButtonFactory`
+
+```typescript
+type ChatBarButtonFactory = (
+    props: ChatBarProps & { isMainChat: boolean; isAnyChat: boolean }
+) => JSX.Element | null;
+```
+
+<ParamField path="props.isMainChat" type="boolean" required>
+  `true` when the chat bar is the primary, full-size text channel input (`analyticsName === "normal"`). Use this to show the button only in regular channels and hide it in threads opened in the sidebar, search results, etc.
+</ParamField>
+
+<ParamField path="props.isAnyChat" type="boolean" required>
+  `true` when the chat bar is either the main input or a sidebar thread input (`analyticsName` is `"normal"` or `"sidebar"`). Use this for a broader match that still excludes non-chat inputs.
+</ParamField>
+
+<ParamField path="props.channel" type="Channel" required>
+  The channel the chat bar belongs to. Use this to conditionally show the button based on channel type, permissions, or other channel properties.
+</ParamField>
+
+<ParamField path="props.disabled" type="boolean" required>
+  `true` when the chat input is disabled (e.g. in a read-only channel). Vencord skips injecting chat bar buttons entirely when the input is disabled, so you rarely need to check this yourself.
+</ParamField>
+
+<ParamField path="props.isEmpty" type="boolean" required>
+  `true` when the message input is empty. Useful for showing the button only when there is content to act on.
+</ParamField>
+
+## `ChatBarButton` component
+
+The `ChatBarButton` component from `@api/ChatButtons` provides the correct spacing, tooltip, and hover state to match Discord's native buttons. Use it to wrap your icon.
+
+```typescript
+import { ChatBarButton } from "@api/ChatButtons";
+
+<ChatBarButton
+    tooltip="Toggle My Feature"
+    onClick={handleClick}
+    onContextMenu={handleRightClick}
+>
+    <MyIcon width={24} height={24} />
+</ChatBarButton>
+```
+
+### Props
+
+<ParamField path="tooltip" type="string" required>
+  Text shown in the tooltip on hover and used as the `aria-label` for accessibility.
+</ParamField>
+
+<ParamField path="onClick" type="MouseEventHandler" required>
+  Left-click handler.
+</ParamField>
+
+<ParamField path="onContextMenu" type="MouseEventHandler">
+  Right-click handler. Use this to open a settings context menu.
+</ParamField>
+
+<ParamField path="onAuxClick" type="MouseEventHandler">
+  Middle-click handler.
+</ParamField>
+
+<ParamField path="buttonProps" type="Omit<HTMLProps<HTMLDivElement>, 'size' | 'onClick' | 'onContextMenu' | 'onAuxClick'>">
+  Extra HTML props forwarded to the inner `<div>` wrapper. Use for `aria-*` attributes, `data-*` attributes, etc.
+</ParamField>
+
+## `addChatBarButton` / `removeChatBarButton`
+
+Register or remove a button manually. Use these when you need more control over when the button is registered.
+
+```typescript
+import { addChatBarButton, removeChatBarButton, ChatBarButtonFactory } from "@api/ChatButtons";
+
+const myRender: ChatBarButtonFactory = props => (
+    <ChatBarButton tooltip="My Button" onClick={() => {}}>
+        <MyIcon />
+    </ChatBarButton>
+);
+
+export default definePlugin({
+    start() {
+        addChatBarButton("my-plugin-button", myRender, MyIcon);
+    },
+    stop() {
+        removeChatBarButton("my-plugin-button");
+    }
+});
+```
+
+<ParamField path="id" type="string" required>
+  A unique string identifier for the button. This key appears in user settings when toggling buttons. Use a namespaced string such as `"my-plugin-button"` to avoid collisions.
+</ParamField>
+
+<ParamField path="render" type="ChatBarButtonFactory" required>
+  The factory component to render.
+</ParamField>
+
+<ParamField path="icon" type="IconComponent" required>
+  Icon for the Settings UI toggle.
+</ParamField>
+
+## Conditional visibility
+
+Return `null` from your `render` function to hide the button in specific contexts. This is the primary way to control when the button appears:
+
+```typescript
+const MyButton: ChatBarButtonFactory = ({ isMainChat, channel }) => {
+    // Only show in the main chat input, not the thread sidebar
+    if (!isMainChat) return null;
+
+    // Only show in guild text channels (type 0), not DMs
+    if (channel.type !== 0) return null;
+
+    return (
+        <ChatBarButton tooltip="Guild-only Feature" onClick={doThing}>
+            <MyIcon />
+        </ChatBarButton>
+    );
+};
+```
+
+## Real-world example — SilentTyping
+
+The `SilentTyping` plugin adds a toggle button to the chat bar that enables or disables silent typing (hiding the "X is typing…" indicator). The button is only shown in the main chat input and only when the user has enabled the icon in settings:
+
+```typescript
+import { ChatBarButton, ChatBarButtonFactory } from "@api/ChatButtons";
+
+const SilentTypingToggle: ChatBarButtonFactory = ({ isMainChat }) => {
+    const { isEnabled, showIcon } = settings.use(["isEnabled", "showIcon"]);
+    const toggle = () => settings.store.isEnabled = !settings.store.isEnabled;
+
+    // Hide if not in the main chat, or if the user turned the icon off
+    if (!isMainChat || !showIcon) return null;
+
+    return (
+        <ChatBarButton
+            tooltip={isEnabled ? "Disable Silent Typing" : "Enable Silent Typing"}
+            onClick={toggle}
+        >
+            {isEnabled ? <SilentTypingEnabledIcon /> : <SilentTypingIcon />}
+        </ChatBarButton>
+    );
+};
+
+export default definePlugin({
+    name: "SilentTyping",
+    settings,
+
+    chatBarButton: {
+        icon: SilentTypingIcon,
+        render: SilentTypingToggle,
+    },
+});
+```
+
+The button icon changes to show a strikethrough when silent typing is active. The `showIcon` setting lets users hide the button entirely while keeping the feature enabled.
+
+## Adding a context menu to your button
+
+Right-clicking a chat bar button is a natural place to expose settings. Combine `onContextMenu` with `ContextMenuApi` to open a menu:
+
+```typescript
+import { ContextMenuApi, Menu } from "@webpack/common";
+
+const MyButton: ChatBarButtonFactory = props => (
+    <ChatBarButton
+        tooltip="My Feature"
+        onClick={() => doAction()}
+        onContextMenu={e => {
+            ContextMenuApi.openContextMenu(e, () => (
+                <Menu.Menu navId="my-plugin-chat-button" onClose={ContextMenuApi.closeContextMenu}>
+                    <Menu.MenuItem id="settings" label="Open Settings" action={openSettings} />
+                </Menu.Menu>
+            ));
+        }}
+    >
+        <MyIcon />
+    </ChatBarButton>
+);
+```
+
+## Message Popover buttons
+
+If you want to add action buttons that appear when hovering over an existing **message** (rather than the chat input), use the Message Popover API instead.
+
+```typescript
+export default definePlugin({
+    messagePopoverButton: {
+        icon: MyIcon,
+        render(message) {
+            return {
+                label: "My Message Action",
+                icon: MyIcon,
+                message,
+                channel: ChannelStore.getChannel(message.channel_id),
+                onClick: () => doSomethingWith(message),
+            };
+        },
+    },
+});
+```
+
+See [Message Events API](/plugins/api-message-events) for full documentation of the Message Popover API.
+
+<Tip>
+  Use `chatBarButton` for actions that relate to composing or sending a message. Use `messagePopoverButton` for actions that operate on an already-sent message.
+</Tip>

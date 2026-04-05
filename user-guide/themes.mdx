@@ -1,0 +1,118 @@
+---
+title: "Themes"
+description: "Install and manage CSS themes to customize Discord's appearance, including BetterDiscord-compatible themes."
+---
+
+Vencord supports full CSS theming. You can load themes from remote URLs, enable locally stored theme files, or use the built-in Quick CSS editor to write your own styles. Themes are applied on top of Discord's own CSS, so they do not modify any Discord files.
+
+## How themes work
+
+When Vencord loads, it reads two sources of theme CSS and injects them into the page:
+
+- **`themeLinks`** — an array of remote CSS URLs loaded via `@import`. These are fetched at runtime each time Discord starts.
+- **`enabledThemes`** — theme files stored locally in Vencord's themes directory (desktop app) or uploaded through the browser UI (web/extension).
+
+Both are controlled from **Settings → Themes**.
+
+## Installing themes from a URL
+
+<Steps>
+  <Step title="Find a theme URL">
+    Copy the raw CSS URL for a theme. BetterDiscord themes hosted on GitHub work well — make sure you link to the **raw** file (e.g. `https://raw.githubusercontent.com/...`), not the repository page.
+  </Step>
+  <Step title="Open Settings → Themes">
+    Open Discord settings and click **Themes** in the Vencord section of the sidebar.
+  </Step>
+  <Step title="Add the theme link">
+    Paste the URL into the **Theme Links** input field and press Enter. The theme loads immediately without a restart.
+  </Step>
+</Steps>
+
+<Tip>
+  Prefix a theme link with `@light ` or `@dark ` to make it conditional on Discord's current color scheme. For example:
+
+  ```
+  @dark https://example.com/my-dark-theme.css
+  @light https://example.com/my-light-theme.css
+  ```
+
+  Vencord maps Discord's `"darker"` and `"midnight"` themes to `dark`, and `"light"` to `light`. Only the matching theme loads for the active scheme.
+</Tip>
+
+## Installing local theme files
+
+<Tabs>
+  <Tab title="Desktop app">
+    <Steps>
+      <Step title="Open the themes folder">
+        In **Settings → Themes**, click **Open Themes Folder**. This opens the Vencord themes directory in your file manager.
+      </Step>
+      <Step title="Drop in a CSS file">
+        Copy any `.css` or `.theme.css` file into the folder.
+      </Step>
+      <Step title="Enable the theme">
+        Back in the Themes tab, your file appears in the **Local Themes** list. Toggle it on. Local themes use the path `vencord:///themes/<filename>` internally and are loaded the same way as remote links.
+      </Step>
+    </Steps>
+  </Tab>
+  <Tab title="Browser extension">
+    <Steps>
+      <Step title="Open Settings → Themes">
+        Click **Themes** in the Vencord settings sidebar.
+      </Step>
+      <Step title="Upload the file">
+        Click **Upload Theme** and select your `.css` file. The browser extension stores the file content in memory and injects it as a Blob URL.
+      </Step>
+      <Step title="Toggle it on">
+        The uploaded theme appears in your theme list. Enable it with the toggle switch.
+      </Step>
+    </Steps>
+  </Tab>
+</Tabs>
+
+## BetterDiscord theme compatibility
+
+Vencord is compatible with most BetterDiscord themes. BD themes are standard CSS files and load without modification. The main caveat is that BD-specific `@META` comment blocks (used by BetterDiscord's own UI) are silently ignored — they do not cause errors.
+
+<Note>
+  Some BD themes rely on BD-specific selectors or class names that may differ in Vencord's patched version of Discord. If a theme looks broken, try the theme developer's Discord server or GitHub issues for a Vencord-compatible version.
+</Note>
+
+## Theme sources
+
+Good places to find themes:
+
+- **BetterDiscord themes** — [betterdiscord.app/themes](https://betterdiscord.app/themes) lists hundreds of community themes compatible with Vencord.
+- **GitHub** — search for `discord theme css` or browse repositories linked from the [Vencord Discord server](https://discord.gg/D9uwnFnqmd).
+- **CSS Discord communities** — dedicated theme-sharing servers often have Vencord-tested themes.
+
+## ClientTheme plugin — native color customization
+
+The `clientTheme` plugin provides a different kind of theming: instead of loading a CSS file, it lets you pick a custom accent color and applies it across Discord's native UI using CSS variable overrides.
+
+Enable it from **Settings → Plugins → ClientTheme**, then configure your color in the plugin settings. It recreates the old Discord client theme experiment and works on top of any other theme you have loaded.
+
+<Tip>
+  `clientTheme` and CSS themes are complementary. You can run a full CSS theme for layout/look changes while using `clientTheme` to tint Discord's accent color to match.
+</Tip>
+
+## How Vencord injects themes
+
+Themes are injected through a `<vencord-user-styles>` shadow element appended to the document root. Vencord builds a stylesheet containing `@import url("...")` for each enabled link or local file, then updates it whenever `themeLinks` or `enabledThemes` changes in settings.
+
+Themes also propagate to any Discord popout windows automatically — Vencord listens for `discordPopoutEvent` messages and clones the style root into each new window.
+
+## Quick CSS editor
+
+For targeted CSS tweaks that don't warrant a full theme file, use the built-in Quick CSS editor. See the [Custom CSS](/user-guide/custom-css) page for details.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Custom CSS" icon="code" href="/user-guide/custom-css">
+    Write Quick CSS snippets without creating a full theme file.
+  </Card>
+  <Card title="Plugins" icon="puzzle-piece" href="/user-guide/plugins">
+    Pair themes with plugins like `themeAttributes` for extra CSS class targets.
+  </Card>
+</CardGroup>

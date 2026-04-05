@@ -1,0 +1,131 @@
+---
+title: "Contributing plugins"
+description: "How to submit a plugin to the Vencord repository — the process, the rules, and what to expect."
+---
+
+Vencord is a community project and welcomes plugin contributions. The guidelines below cover everything from checking whether your idea is acceptable to opening the pull request.
+
+## Before you start
+
+<Steps>
+  <Step title="Check for duplicates">
+    Search [open pull requests](https://github.com/Vendicated/Vencord/pulls) to see if someone is already working on a similar plugin. Submitting duplicate work wastes everyone's time.
+  </Step>
+  <Step title="Check the plugin requests tracker">
+    Browse the [plugin requests tracker](https://github.com/Vencord/plugin-requests/issues) to see whether your idea has already been requested, accepted, or explicitly rejected.
+  </Step>
+  <Step title="Open a plugin request issue">
+    If there is no existing request, [open one](https://github.com/Vencord/plugin-requests/issues/new?assignees=&labels=&projects=&template=request.yml) yourself. State that you want to implement it and wait for feedback before writing code. Maintainers may have suggestions to improve the idea, or it may be declined at this stage — better to know early.
+  </Step>
+  <Step title="Read the plugin rules">
+    Familiarise yourself with the rules below. A plugin that violates them will not be merged regardless of implementation quality.
+  </Step>
+  <Step title="Write the plugin">
+    Place your plugin in `src/plugins/yourPluginName/`. Follow the structure and patterns established by existing plugins.
+  </Step>
+  <Step title="Open a pull request">
+    Submit a PR to the `main` branch. The `dev` branch is force-pushed frequently and is not recommended for contributors. Include a clear description of what the plugin does and why it should be included in Vencord.
+  </Step>
+</Steps>
+
+## Plugin rules
+
+These rules are enforced for all plugins submitted to the main repository. Each rule exists to keep Vencord's plugin catalogue focused, safe, and maintainable.
+
+<Warning>
+Plugins that break any of these rules will not be merged. Read them carefully before writing any code.
+</Warning>
+
+### No simple slash command plugins
+
+Plugins that only add a single slash command (e.g. `/cat` to post a cat picture) should instead be implemented as a [user-installable Discord bot](https://discord.com/developers/docs/change-log#userinstallable-apps-preview). Discord has native support for user-installable apps that appears in the same slash command menu — use that instead.
+
+### No simple text replacement plugins
+
+Plugins that only replace one piece of text with another (e.g. "Let me Google that for you") are not accepted. The built-in **TextReplace** plugin already covers this use case — direct users there instead.
+
+### No raw DOM manipulation
+
+Do not use `document.querySelector`, `element.innerHTML`, or any direct DOM API to modify Discord's UI. Use webpack patches to modify Discord's React rendering, or use React portals. Raw DOM manipulation is fragile, breaks on UI updates, and is difficult to maintain.
+
+### No FakeDeafen, FakeMute, or StereoMic
+
+These plugins misrepresent a user's audio state to other participants in voice channels. They will not be accepted under any circumstances.
+
+### No UI-only hide or redesign plugins
+
+Plugins that only hide elements or restyle the UI without adding new functionality belong as [custom CSS snippets](https://vencord.dev/themes), not as plugins. Examples: hiding the activity feed, changing the sidebar width, rearranging the toolbar. Discord's element inspector and CSS variables can achieve these without any JavaScript.
+
+### No plugins that interact with specific bots
+
+Plugins that add special behavior for third-party bots (sending specific messages, reacting to bot responses, etc.) are not accepted. Official Discord integrations such as YouTube WatchTogether are fine because they are first-party Discord features.
+
+### No selfbots or API spam
+
+The following categories are banned without exception:
+
+- Animated status rotation (cycles through statuses automatically)
+- Mass message deletion ("message pruner")
+- Auto-reply bots
+- Nitro sniper plugins
+- Any plugin that sends repeated automated requests to Discord's API
+
+These violate Discord's Terms of Service and risk account bans for users.
+
+### No untrusted third-party APIs
+
+Plugins that send user data to external servers are only acceptable when the service is a widely trusted, public API (Google, GitHub, etc.). Self-hosted APIs and unknown services are never acceptable — there is no way for Vencord maintainers or users to audit them.
+
+### No plugins that require a user-provided API key
+
+Plugins must not require users to obtain and enter their own API key for a third-party service. This creates a support burden and raises privacy concerns. If your plugin integrates a service, either use a public API that does not require authentication or handle authentication in a way that does not expose user credentials.
+
+### Do not introduce unnecessary dependencies
+
+Adding a new npm package increases the bundle size for every Vencord user and introduces a supply-chain risk. Only add a dependency if there is no reasonable way to implement the required functionality without it, and the package is widely trusted and maintained.
+
+## Writing the plugin
+
+Plugins live in `src/plugins/`. Create a directory named after your plugin in kebab-case if it has multiple files, or a single `.tsx`/`.ts` file for simple plugins.
+
+```
+src/plugins/
+├── myPlugin.ts          # simple single-file plugin
+└── myComplexPlugin/
+    ├── index.tsx        # plugin definition
+    ├── MyComponent.tsx  # React components
+    ├── native.ts        # desktop-only IPC (optional)
+    └── style.css        # styles (optional)
+```
+
+Refer to the other pages in this section for implementation details:
+
+<CardGroup cols={2}>
+  <Card title="Webpack patching" icon="code" href="/plugins/webpack-patching">
+    Modify Discord's internal module code at runtime.
+  </Card>
+  <Card title="Webpack common modules" icon="box" href="/plugins/webpack-common">
+    Use Discord's built-in React, stores, and UI components.
+  </Card>
+  <Card title="Native APIs" icon="cpu" href="/plugins/native-apis">
+    Expose Node.js functionality on Discord Desktop.
+  </Card>
+  <Card title="Plugin structure" icon="layers" href="/plugins/plugin-structure">
+    Plugin definition, settings, lifecycle methods.
+  </Card>
+</CardGroup>
+
+## Userplugins: personal plugins not for submission
+
+If your plugin is intentionally personal (specific to your own workflow, interacts with your own bot, requires your own API key, etc.) you can still write it as a Vencord plugin — just place it in `src/userplugins/` instead of `src/plugins/`. Vencord loads `userplugins/` automatically but this directory is in `.gitignore` and is never submitted upstream.
+
+```
+src/userplugins/
+└── myPersonalPlugin.ts   # loaded by Vencord but never committed
+```
+
+This is the right home for plugins that break the submission rules above but are harmless to your own install.
+
+## Getting help
+
+The Vencord [Discord community](https://vencord.dev/discord) has channels for plugin development discussion. Asking there before opening a pull request is a good way to get early feedback on both the idea and the implementation.

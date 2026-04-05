@@ -1,0 +1,291 @@
+---
+title: "Context Menu API"
+description: "Patch Discord's right-click context menus to add custom menu items from your plugin."
+---
+
+Context menus appear when you right-click on users, messages, channels, guilds, and other UI elements in Discord. The Context Menu API lets your plugin inject new `Menu` items into any of those menus without replacing the whole menu.
+
+## How it works
+
+When Discord renders a context menu, Vencord intercepts the render and calls every patch registered for that menu's `navId`. Each patch receives the menu's `children` array — the list of React elements that make up the menu — and can push, unshift, or splice items into it.
+
+## The `contextMenus` shorthand
+
+The simplest way to patch context menus is the `contextMenus` field in your `definePlugin` call. Each key is a `navId` and each value is a `NavContextMenuPatchCallback`.
+
+```typescript
+export default definePlugin({
+    name: "MyPlugin",
+    description: "...",
+    authors: [],
+
+    contextMenus: {
+        "user-context"(children, props) {
+            children.push(
+                <Menu.MenuItem
+                    id="my-plugin-action"
+                    label="My Action"
+                    action={() => console.log("clicked", props.user)}
+                />
+            );
+        }
+    }
+});
+```
+
+Vencord automatically registers the patches when your plugin starts and removes them when it stops. You do not need to call `addContextMenuPatch` or `removeContextMenuPatch` manually when using this shorthand.
+
+## `NavContextMenuPatchCallback`
+
+```typescript
+type NavContextMenuPatchCallback = (
+    children: Array<ReactElement<any> | null>,
+    ...args: Array<any>
+) => void;
+```
+
+<ParamField path="children" type="Array<ReactElement | null>" required>
+  The current children of the context menu. Mutate this array in-place to add, remove, or reorder items.
+</ParamField>
+
+<ParamField path="...args" type="any[]">
+  Context-specific arguments passed when the menu is opened. The exact shape depends on which menu you are patching — for example, `user-context` passes `{ user, guildId }` as the first argument.
+</ParamField>
+
+## `GlobalContextMenuPatchCallback`
+
+A global patch fires for every context menu, regardless of `navId`.
+
+```typescript
+type GlobalContextMenuPatchCallback = (
+    navId: string,
+    children: Array<ReactElement<any> | null>,
+    ...args: Array<any>
+) => void;
+```
+
+Use `addGlobalContextMenuPatch` when you need to respond to all context menus at once, or when you want to inspect the `navId` dynamically.
+
+## Functions
+
+### `addContextMenuPatch`
+
+Register a patch for one or more context menus identified by their `navId`.
+
+```typescript
+function addContextMenuPatch(
+    navId: string | string[],
+    patch: NavContextMenuPatchCallback
+): void
+```
+
+<ParamField path="navId" type="string | string[]" required>
+  The `navId` of the context menu to patch. Pass an array to register the same callback for multiple menus.
+</ParamField>
+
+<ParamField path="patch" type="NavContextMenuPatchCallback" required>
+  The callback to invoke when the targeted menu renders.
+</ParamField>
+
+---
+
+### `removeContextMenuPatch`
+
+Remove a previously registered patch.
+
+```typescript
+function removeContextMenuPatch<T extends string | string[]>(
+    navId: T,
+    patch: NavContextMenuPatchCallback
+): T extends string ? boolean : boolean[]
+```
+
+Returns `true` if the patch was found and removed. When `navId` is an array, returns a parallel array of booleans.
+
+---
+
+### `addGlobalContextMenuPatch`
+
+Register a patch that fires for every context menu.
+
+```typescript
+function addGlobalContextMenuPatch(patch: GlobalContextMenuPatchCallback): void
+```
+
+---
+
+### `removeGlobalContextMenuPatch`
+
+```typescript
+function removeGlobalContextMenuPatch(patch: GlobalContextMenuPatchCallback): boolean
+```
+
+---
+
+### `findGroupChildrenByChildId`
+
+A helper that searches the nested menu tree for the group that contains a child with a specific `id` prop. Use this to insert an item adjacent to a known existing item.
+
+```typescript
+function findGroupChildrenByChildId(
+    id: string | string[],
+    children: Array<ReactElement | null | undefined>,
+    matchSubstring?: boolean
+): Array<ReactElement | null | undefined> | null
+```
+
+<ParamField path="id" type="string | string[]" required>
+  The `id` prop of the child item to search for. Pass an array to try multiple ids.
+</ParamField>
+
+<ParamField path="children" type="Array<ReactElement | null | undefined>" required>
+  The top-level children array of the context menu.
+</ParamField>
+
+<ParamField path="matchSubstring" type="boolean" default="false">
+  When `true`, checks whether the child's `id` *contains* the search string rather than an exact match.
+</ParamField>
+
+<ResponseField name="return" type="Array<ReactElement | null | undefined> | null">
+  The group array that contains the matched child, or `null` if not found.
+</ResponseField>
+
+## Menu component types
+
+Import menu components from `@webpack/common`:
+
+```typescript
+import { Menu } from "@webpack/common";
+```
+
+| Component | Use |
+|-----------|-----|
+| `Menu.MenuItem` | A standard clickable item with a label and optional icon |
+| `Menu.MenuCheckboxItem` | A checkable toggle item |
+| `Menu.MenuRadioItem` | A radio-button item within a group |
+| `Menu.MenuGroup` | A visual grouping of items, optionally with a label |
+| `Menu.MenuSeparator` | A horizontal divider between groups |
+| `Menu.MenuControlItem` | An item that renders an arbitrary control (slider, text field, etc.) |
+
+## Common `navId` values
+
+<Note>
+  Discord does not publish a list of `navId` values. Use the Developer Tools context menu (requires Developer Mode) or search the Vencord source and existing plugins to discover the id for a particular menu.
+</Note>
+
+| `navId` | Opens when right-clicking |
+|---------|--------------------------|
+| `user-context` | A user's avatar or name |
+| `guild-context` | A server name |
+| `channel-context` | A text or voice channel |
+| `thread-context` | A thread |
+| `message` | A message |
+| `gdm-context` | A group DM |
+| `textarea-context` | Inside the chat input box |
+| `dev-context` | Developer role/entity inspector (requires Developer Mode) |
+| `guild-settings-role-context` | A role in server settings |
+
+## Real-world example
+
+The `BetterRoleContext` plugin adds **Copy Role Color**, **Edit Role**, and **View Role Icon** items to the developer context menu that appears when right-clicking a role:
+
+```typescript
+import { Menu } from "@webpack/common";
+import { getCurrentGuild } from "@utils/discord";
+import { GuildRoleStore, PermissionStore } from "@webpack/common";
+
+export default definePlugin({
+    name: "BetterRoleContext",
+    description: "Adds options to copy role color / edit role / view role icon when right clicking roles",
+    authors: [Devs.Ven],
+    dependencies: ["UserSettingsAPI"],
+
+    contextMenus: {
+        "dev-context"(children, { id }: { id: string }) {
+            const guild = getCurrentGuild();
+            if (!guild) return;
+
+            const role = GuildRoleStore.getRole(guild.id, id);
+            if (!role) return;
+
+            if (role.colorString) {
+                children.unshift(
+                    <Menu.MenuItem
+                        id="vc-copy-role-color"
+                        label="Copy Role Color"
+                        action={() => copyToClipboard(role.colorString!)}
+                        icon={AppearanceIcon}
+                    />
+                );
+            }
+
+            if (role.icon) {
+                children.push(
+                    <Menu.MenuItem
+                        id="vc-view-role-icon"
+                        label="View Role Icon"
+                        action={() => openImageModal({ url: `.../${role.icon}.png` })}
+                        icon={ImageIcon}
+                    />
+                );
+            }
+        }
+    }
+});
+```
+
+The `SilentTyping` plugin uses `findGroupChildrenByChildId` to insert a checkbox next to the **Submit** button in the chat input context menu:
+
+```typescript
+import { findGroupChildrenByChildId, NavContextMenuPatchCallback } from "@api/ContextMenu";
+import { Menu } from "@webpack/common";
+
+const ChatBarContextCheckbox: NavContextMenuPatchCallback = children => {
+    const { isEnabled } = settings.use(["isEnabled"]);
+
+    const group = findGroupChildrenByChildId("submit-button", children);
+    if (!group) return;
+
+    const idx = group.findIndex(c => c?.props?.id === "submit-button");
+
+    group.splice(idx + 1, 0,
+        <Menu.MenuCheckboxItem
+            id="vc-silent-typing"
+            label="Enable Silent Typing"
+            checked={isEnabled}
+            action={() => settings.store.isEnabled = !settings.store.isEnabled}
+        />
+    );
+};
+
+export default definePlugin({
+    contextMenus: {
+        "textarea-context": ChatBarContextCheckbox
+    }
+});
+```
+
+## Manual registration
+
+If you need to register patches outside of `contextMenus` — for example conditionally at runtime — call the functions directly in `start()` and `stop()`:
+
+```typescript
+import { addContextMenuPatch, removeContextMenuPatch } from "@api/ContextMenu";
+
+const myPatch: NavContextMenuPatchCallback = (children, props) => {
+    children.push(<Menu.MenuItem id="my-item" label="Hello" action={() => {}} />);
+};
+
+export default definePlugin({
+    start() {
+        addContextMenuPatch("user-context", myPatch);
+    },
+    stop() {
+        removeContextMenuPatch("user-context", myPatch);
+    }
+});
+```
+
+<Warning>
+  Always remove patches in `stop()` when registering them manually. Patches registered via the `contextMenus` shorthand are cleaned up automatically.
+</Warning>

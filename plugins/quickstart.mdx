@@ -1,0 +1,221 @@
+---
+title: "Plugin quickstart"
+description: "Set up a Vencord development environment and build your first plugin from scratch."
+---
+
+This guide walks you through cloning Vencord, setting up the dev environment, and writing a working plugin that suppresses typing indicators — modelled on the real `SilentTyping` plugin included in Vencord.
+
+<Note>
+  You need [Node.js](https://nodejs.org) 18 or later and [pnpm](https://pnpm.io) installed before starting.
+</Note>
+
+<Steps>
+
+<Step title="Clone the repository">
+
+```bash
+git clone https://github.com/Vendicated/Vencord.git
+cd Vencord
+```
+
+</Step>
+
+<Step title="Install dependencies">
+
+Vencord uses pnpm as its package manager. Run the install command from the repo root:
+
+```bash
+pnpm install
+```
+
+</Step>
+
+<Step title="Start the dev watcher">
+
+The `dev` script builds Vencord in watch mode, recompiling on every file change:
+
+```bash
+pnpm dev
+```
+
+Once the initial build finishes, inject Vencord into your Discord client if you have not already:
+
+```bash
+pnpm inject
+```
+
+Restart Discord. Vencord loads the build output from `dist/`. Subsequent file saves in `src/` rebuild automatically — refresh Discord (Ctrl+R) to pick up changes.
+
+<Tip>
+  Keep Discord's DevTools open (**Ctrl+Shift+I**) while developing. Vencord logs plugin start/stop events, patch results, and errors to the console.
+</Tip>
+
+</Step>
+
+<Step title="Create your plugin file">
+
+User plugins live in `src/userplugins/`. They are compiled into your local build but never distributed. Create a directory and an `index.ts` file for your plugin:
+
+```
+src/userplugins/
+└── helloWorld/
+    └── index.ts
+```
+
+<Note>
+  Each plugin should be in its own subdirectory. For single-file plugins a bare `.ts` file works too, but a directory keeps things tidy when you add settings, assets, or helper modules later.
+</Note>
+
+</Step>
+
+<Step title="Write a minimal plugin">
+
+Every Vencord plugin is a default export of `definePlugin`. At minimum you need `name`, `description`, and `authors`.
+
+```typescript
+// src/userplugins/helloWorld/index.ts
+import definePlugin from "@utils/types";
+
+export default definePlugin({
+  name: "HelloWorld",
+  description: "Logs a greeting when Vencord starts.",
+  authors: [{ name: "YourName", id: 0n }],
+
+  start() {
+    console.log("HelloWorld plugin started!");
+  },
+
+  stop() {
+    console.log("HelloWorld plugin stopped.");
+  },
+});
+```
+
+Save the file. The watcher rebuilds, and after refreshing Discord you will find **HelloWorld** in **Settings → Plugins**. Enable it and check the console.
+
+<Note>
+  The `id` field in `PluginAuthor` is your Discord user ID as a `BigInt` literal (suffix `n`). It is displayed in the plugin card alongside your name. Use `0n` as a placeholder while developing.
+</Note>
+
+</Step>
+
+<Step title="Add a webpack patch">
+
+Patches let you modify Discord's bundled code before it runs. The match string in `find` identifies which module to target; `replacement.match` is the exact location within that module to rewrite.
+
+Below is a simplified version of SilentTyping's core patch, which replaces Discord's `startTyping` function so the typing indicator is never sent:
+
+```typescript
+import definePlugin from "@utils/types";
+
+export default definePlugin({
+  name: "SilentTypingDemo",
+  description: "Prevents Discord from broadcasting that you are typing.",
+  authors: [{ name: "YourName", id: 0n }],
+
+  patches: [
+    {
+      // Find the module that contains the TYPING_START_LOCAL dispatch
+      find: '.dispatch({type:"TYPING_START_LOCAL"',
+      replacement: {
+        // Replace the startTyping method with a no-op
+        match: /startTyping\(\i\){.+?},stop/,
+        replace: "startTyping:()=>{},stop",
+      },
+    },
+  ],
+});
+```
+
+<Warning>
+  Patch `find` strings and `match` regexes target minified Discord code. Minified identifiers change between Discord builds, so patterns use `\i` (a Vencord shorthand for `[a-zA-Z_$][a-zA-Z0-9_$]*`) to match any identifier. When a patch stops matching, Discord has updated its bundles.
+</Warning>
+
+</Step>
+
+<Step title="Add settings">
+
+Use `definePluginSettings` from `@api/Settings` to add user-configurable options. Settings are persisted automatically and rendered in the plugin's settings panel.
+
+```typescript
+import { definePluginSettings } from "@api/Settings";
+import definePlugin, { OptionType } from "@utils/types";
+
+const settings = definePluginSettings({
+  isEnabled: {
+    type: OptionType.BOOLEAN,
+    description: "Actually suppress typing indicators",
+    default: true,
+  },
+});
+
+export default definePlugin({
+  name: "SilentTypingDemo",
+  description: "Prevents Discord from broadcasting that you are typing.",
+  authors: [{ name: "YourName", id: 0n }],
+  settings,
+
+  patches: [
+    {
+      find: '.dispatch({type:"TYPING_START_LOCAL"',
+      replacement: {
+        match: /startTyping\(\i\){.+?},stop/,
+        replace: "startTyping:$self.startTyping,stop",
+      },
+    },
+  ],
+
+  // $self refers to this plugin object at patch-replace time
+  startTyping(channelId: string) {
+    if (settings.store.isEnabled) return; // swallow the event
+    // fall back to the real dispatch when disabled
+    const { FluxDispatcher } = Vencord.Webpack.Common;
+    FluxDispatcher.dispatch({ type: "TYPING_START_LOCAL", channelId });
+  },
+});
+```
+
+After saving, reload Discord and open the plugin's settings. You will see a toggle for **Actually suppress typing indicators**.
+
+</Step>
+
+<Step title="Build for production">
+
+When you are done developing, run a full production build:
+
+```bash
+pnpm build
+```
+
+For the browser extension build:
+
+```bash
+pnpm buildWeb
+```
+
+Run the full test suite (build + type check + lint + plugin list generation) before opening a pull request:
+
+```bash
+pnpm test
+```
+
+</Step>
+
+</Steps>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Plugin structure" icon="sitemap" href="/plugins/plugin-structure">
+    Full reference for every PluginDef field, the Patch interface, and all setting types.
+  </Card>
+  <Card title="Settings API" icon="sliders" href="/plugins/api-settings">
+    Deep dive into definePluginSettings, OptionType, and per-setting validation.
+  </Card>
+  <Card title="Commands API" icon="terminal" href="/plugins/api-commands">
+    Register slash commands with typed options and execute handlers.
+  </Card>
+  <Card title="Contributing" icon="code-pull-request" href="/plugins/contributing">
+    Guidelines for submitting your plugin to the Vencord repository.
+  </Card>
+</CardGroup>

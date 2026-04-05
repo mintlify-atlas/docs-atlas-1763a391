@@ -1,0 +1,116 @@
+---
+title: "Installation"
+description: "Install Vencord on Discord Desktop using the graphical installer or the CLI inject script on Windows, macOS, and Linux."
+---
+
+Vencord supports all three Discord desktop branches — **Stable**, **Canary**, and **PTB** — on Windows, macOS, and Linux. The easiest way to install is through the official graphical installer. If you are building from source, you can also use the `inject` npm script directly.
+
+<Warning>
+  Installing Vencord modifies the Discord desktop application. Client modifications technically violate Discord's Terms of Service. See [What is Vencord?](/user-guide/introduction) for a full discussion of the risks.
+</Warning>
+
+## Using the official installer (recommended)
+
+The Vencord Installer is a standalone GUI application that detects your Discord installation, injects Vencord, and keeps it updated. It is the recommended method for most users.
+
+<Steps>
+  <Step title="Download the installer">
+    Go to [vencord.dev/download](https://vencord.dev/download) and download the installer for your platform:
+
+    - **Windows** — `VencordInstaller.exe`
+    - **macOS** — `VencordInstaller.MacOS.zip`
+    - **Linux** — `VencordInstaller-linux`
+  </Step>
+  <Step title="Run the installer">
+    <Tabs>
+      <Tab title="Windows">
+        Double-click `VencordInstaller.exe`. If Windows SmartScreen warns you, click **More info → Run anyway**. The installer does not require Administrator privileges in most cases.
+      </Tab>
+      <Tab title="macOS">
+        Unzip `VencordInstaller.MacOS.zip` and open the resulting app. macOS may block it on first launch because it is not signed by an Apple-notarized developer. To allow it:
+
+        1. Open **System Settings → Privacy & Security**.
+        2. Scroll down to the security warning for VencordInstaller and click **Open Anyway**.
+
+        The installer's `runInstaller.mjs` script also handles this automatically by running `sudo spctl --add` and `sudo xattr -d com.apple.quarantine` when invoked via npm.
+      </Tab>
+      <Tab title="Linux">
+        Make the binary executable and run it:
+
+        ```bash
+        chmod +x VencordInstaller-linux
+        ./VencordInstaller-linux
+        ```
+
+        If you are on a system without a graphical environment, use the [CLI inject method](#using-the-cli-inject-script) instead.
+      </Tab>
+    </Tabs>
+  </Step>
+  <Step title="Select your Discord installation">
+    The installer lists every Discord branch it detects (Stable, Canary, PTB). Select the branch you want to patch, then click **Install**.
+  </Step>
+  <Step title="Launch Discord">
+    Start — or restart — Discord. You will see a **Vencord** section appear in Discord's settings sidebar, with sub-pages for Plugins, Themes, Updater, Cloud, and Backup & Restore.
+  </Step>
+</Steps>
+
+## Using the CLI inject script
+
+If you have cloned the Vencord repository and want to inject a local development build, use the `inject` npm script. This downloads the platform-appropriate installer binary from GitHub Releases and runs it with `--install`.
+
+```bash
+pnpm inject
+```
+
+To remove Vencord from a Discord installation, run:
+
+```bash
+pnpm uninject
+```
+
+Both scripts are defined in `package.json` and delegate to `scripts/runInstaller.mjs`, which selects the correct binary for your platform:
+
+| Platform | Binary downloaded |
+|---|---|
+| Windows | `VencordInstallerCli.exe` |
+| macOS | `VencordInstaller.MacOS.zip` (extracted automatically) |
+| Linux | `VencordInstallerCli-linux` |
+
+The installer binary is cached in `dist/Installer/` and only re-downloaded when a newer release is available (checked via the `ETag` header).
+
+<Note>
+  The `inject`/`uninject` scripts set `VENCORD_DEV_INSTALL=1` in the environment, which tells the installer to use your local build files from `dist/` instead of downloading a release build. Run `pnpm build` first so the `dist/` directory is populated.
+</Note>
+
+## Discord branch support
+
+Vencord can be installed on any combination of Discord's three desktop branches. Each branch maintains an independent Vencord installation.
+
+| Branch | Update channel | Notes |
+|---|---|---|
+| **Stable** | Standard releases | Recommended for most users |
+| **Canary** | Daily experimental builds | May break more often; useful for testing |
+| **PTB** (Public Test Build) | Weekly pre-release builds | Middle ground between Stable and Canary |
+
+## Updating Vencord
+
+By default, Vencord checks for updates automatically on startup (`autoUpdate: true` in settings). When an update is available, a notification appears and Vencord downloads the new files in the background. You can also trigger a manual update from **Settings → Updater**.
+
+## Uninstalling Vencord
+
+<Tabs>
+  <Tab title="Using the installer">
+    Re-open the VencordInstaller, select the Discord branch you want to restore, and click **Uninstall**. This removes Vencord's injected files and restores Discord's original `app.asar`.
+  </Tab>
+  <Tab title="Using the CLI">
+    Run the uninject script from your Vencord source directory:
+
+    ```bash
+    pnpm uninject
+    ```
+
+    Select the branch to restore when prompted.
+  </Tab>
+</Tabs>
+
+After uninstalling, restart Discord to apply the change.

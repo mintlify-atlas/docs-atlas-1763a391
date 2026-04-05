@@ -1,0 +1,128 @@
+---
+title: "Frequently Asked Questions"
+description: "Answers to the most common questions about Vencord — what it is, how it works, and what to expect."
+---
+
+<AccordionGroup>
+
+  <Accordion title="Is Vencord against Discord's Terms of Service?">
+    Yes. Client modifications are explicitly against Discord's Terms of Service.
+
+    That said, Discord has historically been indifferent toward client mods. There are no known cases of users being banned solely for using Vencord or other client modifications. All of Vencord's built-in plugins are designed to be safe — none implement abusive or API-spamming behaviour.
+
+    <Warning>
+      If your account is critical to you and any risk is unacceptable, you should avoid all client modifications — not just Vencord. Additionally, avoid posting screenshots that show Vencord's UI in servers where it might get you banned.
+    </Warning>
+  </Accordion>
+
+  <Accordion title="Will I get banned for using Vencord?">
+    There are no known cases of users being banned for using Vencord. Discord is generally indifferent to client mods as long as they don't implement abusive behaviour like selfbots, API spam, or nitro snipers.
+
+    All of Vencord's built-in plugins are reviewed to avoid such behaviour. User-installed third-party plugins are outside of Vencord's control — use them at your own discretion.
+
+    <Note>
+      Use Vencord at your own risk. While the risk is considered low, no guarantee can be made.
+    </Note>
+  </Accordion>
+
+  <Accordion title="Does Vencord collect any data or telemetry?">
+    No. Vencord is privacy-first and collects no telemetry whatsoever.
+
+    In addition, Vencord actively **blocks Discord's own analytics and crash reporting** out of the box — you get more privacy than vanilla Discord. No usage data, error reports, or plugin activity is ever sent anywhere by Vencord itself.
+
+    Settings sync (cloud backup) is entirely opt-in and disabled by default. See the `cloud.settingsSync` setting in `Settings.ts`.
+  </Accordion>
+
+  <Accordion title="How do I update Vencord?">
+    Vencord updates itself automatically. The `autoUpdate` setting is enabled by default, so Vencord will fetch and apply updates in the background. You will also receive a notification when an update is available, controlled by the `autoUpdateNotification` setting.
+
+    To update manually:
+
+    1. Open Discord and go to **User Settings → Vencord → Updater**.
+    2. Click **Check for Updates**, then **Update** if one is available.
+    3. Restart Discord to apply the update.
+
+    Alternatively, re-run the [Vencord installer](https://vencord.dev/download) and it will update your installation automatically.
+
+    <Tip>
+      If you're having trouble with a plugin, always check for updates first. Broken plugins are usually fixed within 12 hours of a Discord update.
+    </Tip>
+  </Accordion>
+
+  <Accordion title="Can I use Vencord in my browser without installing it?">
+    Yes. Vencord offers two browser options:
+
+    - **Browser Extension** — Available for Chrome, Firefox, and other Chromium-based browsers. Install it and use Discord at [discord.com](https://discord.com) with Vencord active.
+    - **UserScript** — A Greasemonkey/Tampermonkey-compatible script for browsers where extensions aren't available.
+
+    Both options give you access to Vencord's full plugin and theming system directly in your browser, with no desktop app required. See the [Browser Extension](/user-guide/browser-extension) page for installation instructions.
+  </Accordion>
+
+  <Accordion title="Are BetterDiscord themes compatible with Vencord?">
+    Yes. Vencord includes a built-in CSS editor and supports importing external CSS files, including BetterDiscord themes.
+
+    To use a BetterDiscord theme:
+
+    1. Find the raw CSS URL for the theme (usually a `.css` file on GitHub).
+    2. Go to **User Settings → Vencord → Themes**.
+    3. Paste the URL into the **Theme Links** field, or paste the CSS directly into the **Quick CSS** editor.
+
+    See the [Themes](/user-guide/themes) page for more detail.
+  </Accordion>
+
+  <Accordion title="A plugin is broken — what do I do?">
+    Plugin breakage after a Discord update is common and expected. Here's what to do:
+
+    1. **Update Vencord first.** Go to **Settings → Vencord → Updater** and check for updates. Most broken plugins are fixed within 12 hours of a Discord update.
+    2. **Check the known issues channel.** Join the [Vencord Discord server](https://discord.gg/D9uwnFnqmd) and look in the `#known-issues` channel to see if your problem is already tracked.
+    3. **Ask in the support channel.** If it isn't listed, open a thread in the support category. Run `/vencord-debug` and `/vencord-plugins` when prompted to share diagnostic info automatically.
+    4. **Report on GitHub.** If the issue persists after updating, [open an issue](https://github.com/Vendicated/Vencord/issues) with steps to reproduce.
+
+    <Note>
+      Do not DM plugin developers directly for support. Use the support channels in the Discord server instead.
+    </Note>
+  </Accordion>
+
+  <Accordion title="How do I uninstall Vencord?">
+    Re-run the Vencord installer and choose the **Uninstall** option.
+
+    1. Download the installer from [vencord.dev/download](https://vencord.dev/download).
+    2. Run it and select the Discord installation you want to remove Vencord from.
+    3. Click **Uninstall**.
+
+    Discord will be restored to its original state. Your Discord account and data are not affected.
+  </Accordion>
+
+  <Accordion title="Can I use Vencord on Discord Canary or PTB?">
+    Yes. Vencord works on all Discord branches:
+
+    - **Discord Stable**
+    - **Discord Canary**
+    - **Discord PTB** (Public Test Build)
+
+    When you run the installer, you can choose which branch to inject Vencord into. You can also install it across multiple branches independently.
+  </Accordion>
+
+  <Accordion title="How do I write my own plugin?">
+    Vencord has a full plugin development system. Plugins are written in TypeScript and have access to Vencord's webpack patching API, settings API, commands API, and more.
+
+    To get started:
+
+    - Read the [Plugin Development](/plugins/overview) section of this documentation.
+    - Follow the [Quickstart guide](/plugins/quickstart) to set up your dev environment and write your first plugin.
+    - Review the [Contributing guide](https://github.com/Vendicated/Vencord/blob/main/CONTRIBUTING.md) and plugin rules before submitting a plugin for inclusion.
+
+    <Tip>
+      Check the [plugin requests tracker](https://github.com/Vencord/plugin-requests/issues) before starting work — someone may already be building the same thing, or a similar idea may have been declined previously.
+    </Tip>
+  </Accordion>
+
+  <Accordion title="Is Vencord open source?">
+    Yes. Vencord is fully open source and licensed under the **GNU General Public License v3.0 (GPL-3.0)**.
+
+    - Source code: [github.com/Vendicated/Vencord](https://github.com/Vendicated/Vencord)
+    - Documentation source: [github.com/Vencord/Docs](https://github.com/Vencord/Docs)
+    - Contributions via pull request are welcome. See the [Contributing guide](https://github.com/Vendicated/Vencord/blob/main/CONTRIBUTING.md) to get started.
+  </Accordion>
+
+</AccordionGroup>

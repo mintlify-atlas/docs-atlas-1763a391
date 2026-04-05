@@ -1,0 +1,361 @@
+---
+title: "Commands API"
+description: "Register custom slash commands that appear in Discord's / command menu."
+---
+
+The Commands API lets your plugin add entries to Discord's slash-command picker (the `/` menu).
+Commands registered by Vencord plugins behave like built-in commands: they appear in the
+autocomplete list, support typed options, and execute client-side without any bot or application ID.
+
+## Registering commands
+
+Declare a `commands` array in your `definePlugin` call. Each element is a `Command` object.
+Vencord registers every command in the array when the plugin starts and unregisters them when
+the plugin stops.
+
+```typescript
+import { ApplicationCommandInputType, ApplicationCommandOptionType, sendBotMessage } from "@api/Commands";
+import definePlugin from "@utils/types";
+
+export default definePlugin({
+    name: "MyPlugin",
+    description: "An example plugin with a slash command",
+    authors: [],
+
+    commands: [
+        {
+            name: "greet",
+            description: "Send a greeting to the current channel.",
+            inputType: ApplicationCommandInputType.BUILT_IN,
+            options: [
+                {
+                    name: "name",
+                    description: "The name to greet",
+                    type: ApplicationCommandOptionType.STRING,
+                    required: true,
+                },
+            ],
+            execute(args, ctx) {
+                sendBotMessage(ctx.channel.id, {
+                    content: `Hello, ${args[0].value}!`,
+                });
+            },
+        },
+    ],
+});
+```
+
+<Note>
+  Commands are purely client-side. They are never sent to Discord's servers and are only visible
+  to the local user. Other people in the channel cannot see your Vencord commands in their
+  autocomplete.
+</Note>
+
+---
+
+## Command structure
+
+### Command
+
+<ParamField path="name" type="string" required>
+  The name of the command as it appears in the `/` picker. Must be unique across all registered
+  commands (Vencord and Discord built-ins alike). Names are lowercase by convention.
+</ParamField>
+
+<ParamField path="description" type="string" required>
+  Short description shown below the command name in the autocomplete list.
+</ParamField>
+
+<ParamField path="execute" type="(args: CommandArgument[], ctx: CommandContext) => void | Promise<void>" required>
+  The function called when the user submits the command. Receives the resolved option values in
+  `args` and the current channel/guild in `ctx`. Can be async.
+</ParamField>
+
+<ParamField path="inputType" type="ApplicationCommandInputType">
+  Controls how the command input behaves. Use `ApplicationCommandInputType.BUILT_IN` for most
+  commands. Defaults to `BUILT_IN_TEXT`, which keeps the typed text in the message box after
+  execution.
+</ParamField>
+
+<ParamField path="options" type="CommandOption[]">
+  List of parameters the user can fill in. See [CommandOption](#commandoption) below.
+</ParamField>
+
+<ParamField path="predicate" type="(ctx: CommandContext) => boolean">
+  Optional function called before showing the command in the picker. Return `false` to hide the
+  command in a given context (for example, only show it in servers, not DMs).
+</ParamField>
+
+---
+
+### CommandOption
+
+<ParamField path="name" type="string" required>
+  Parameter name shown in the command picker.
+</ParamField>
+
+<ParamField path="description" type="string" required>
+  Description shown next to the option in the picker.
+</ParamField>
+
+<ParamField path="type" type="ApplicationCommandOptionType" required>
+  The data type of this option. See [ApplicationCommandOptionType](#applicationcommandoptiontype).
+</ParamField>
+
+<ParamField path="required" type="boolean">
+  Whether the user must provide this option before the command can be submitted.
+  Default: `false`.
+</ParamField>
+
+<ParamField path="choices" type="ChoicesOption[]">
+  A fixed list of allowed values shown as a sub-picker. Only applicable to `STRING`, `INTEGER`,
+  and `NUMBER` options.
+
+  <Expandable title="ChoicesOption">
+    <ResponseField name="name" type="string">
+      Internal identifier.
+    </ResponseField>
+    <ResponseField name="label" type="string">
+      Text shown in the UI.
+    </ResponseField>
+    <ResponseField name="value" type="string">
+      The value passed to `execute` when this choice is selected.
+    </ResponseField>
+  </Expandable>
+</ParamField>
+
+---
+
+### ApplicationCommandOptionType
+
+| Value | Type |
+|---|---|
+| `SUB_COMMAND` (1) | A sub-command group |
+| `STRING` (3) | Text input |
+| `INTEGER` (4) | Whole number |
+| `BOOLEAN` (5) | True/false toggle |
+| `USER` (6) | User mention picker |
+| `CHANNEL` (7) | Channel mention picker |
+| `ROLE` (8) | Role mention picker |
+| `NUMBER` (10) | Floating-point number |
+
+---
+
+### ApplicationCommandInputType
+
+| Value | Behavior |
+|---|---|
+| `BUILT_IN` (0) | Command is sent without leaving text in the input box |
+| `BUILT_IN_TEXT` (1) | Command result is placed as text in the message box |
+
+Most plugins should use `BUILT_IN`.
+
+---
+
+### CommandContext
+
+The second argument passed to `execute`.
+
+<ResponseField name="channel" type="Channel">
+  The Discord channel where the command was invoked. Use `channel.id` to target
+  `sendBotMessage`.
+</ResponseField>
+
+<ResponseField name="guild" type="Guild | undefined">
+  The guild the channel belongs to. `undefined` in DMs.
+</ResponseField>
+
+---
+
+## Helper functions
+
+### sendBotMessage
+
+Send a message that appears as if it came from Clyde (the Discord bot). The message is
+displayed only to the local user and is never actually sent to Discord's servers.
+
+```typescript
+import { sendBotMessage } from "@api/Commands";
+
+sendBotMessage(ctx.channel.id, {
+    content: "Your command ran successfully!",
+});
+```
+
+<ParamField path="channelId" type="string" required>
+  The channel to render the bot message in. Use `ctx.channel.id` inside `execute`.
+</ParamField>
+
+<ParamField path="message" type="Partial<Message>" required>
+  Partial message object merged on top of a default Clyde message. The most common field is
+  `content` (plain text). You can also provide `embeds` for richer output.
+</ParamField>
+
+---
+
+### findOption
+
+Retrieve the value of a named option from the `args` array. Providing a fallback value makes
+the return type non-nullable.
+
+```typescript
+import { findOption } from "@api/Commands";
+
+execute(args, ctx) {
+    const name = findOption<string>(args, "name", "World");
+    sendBotMessage(ctx.channel.id, { content: `Hello, ${name}!` });
+},
+```
+
+<ParamField path="args" type="CommandArgument[]" required>
+  The `args` array passed to `execute`.
+</ParamField>
+
+<ParamField path="name" type="string" required>
+  The option name to look up.
+</ParamField>
+
+<ParamField path="fallbackValue" type="T">
+  Returned when the option was not provided by the user.
+</ParamField>
+
+---
+
+### Pre-built option constants
+
+Vencord exposes two ready-made `CommandOption` objects that match the option shapes used by
+built-in commands. You can splice these directly into your `options` array instead of defining
+them by hand.
+
+```typescript
+import { OptionalMessageOption, RequiredMessageOption } from "@api/Commands";
+
+commands: [
+    {
+        name: "shout",
+        description: "Send text in uppercase.",
+        inputType: ApplicationCommandInputType.BUILT_IN,
+        options: [OptionalMessageOption],
+        execute(args, ctx) {
+            const text = findOption(args, "message", "");
+            sendBotMessage(ctx.channel.id, { content: text.toUpperCase() });
+        },
+    },
+],
+```
+
+| Export | Name | Required |
+|---|---|---|
+| `OptionalMessageOption` | `"message"` | No |
+| `RequiredMessageOption` | `"message"` | Yes |
+
+---
+
+## Real-world example — FriendInvites plugin
+
+The built-in `FriendInvites` plugin registers three commands. This is the full source
+(`src/plugins/friendInvites/index.ts`):
+
+```typescript
+import { ApplicationCommandInputType, sendBotMessage } from "@api/Commands";
+import { Devs } from "@utils/constants";
+import definePlugin from "@utils/types";
+import { findByPropsLazy } from "@webpack";
+
+const FriendInvites = findByPropsLazy("createFriendInvite");
+
+export default definePlugin({
+    name: "FriendInvites",
+    description: "Create and manage friend invite links via slash commands.",
+    authors: [Devs.afn, Devs.Dziurwa],
+
+    commands: [
+        {
+            name: "create friend invite",
+            description: "Generates a friend invite link.",
+            inputType: ApplicationCommandInputType.BUILT_IN,
+            execute: async (args, ctx) => {
+                const invite = await FriendInvites.createFriendInvite();
+                sendBotMessage(ctx.channel.id, {
+                    content: `discord.gg/${invite.code} · Expires: <t:${new Date(invite.expires_at).getTime() / 1000}:R>`,
+                });
+            },
+        },
+        {
+            name: "view friend invites",
+            description: "View a list of all generated friend invites.",
+            inputType: ApplicationCommandInputType.BUILT_IN,
+            execute: async (_, ctx) => {
+                const invites = await FriendInvites.getAllFriendInvites();
+                sendBotMessage(ctx.channel.id, {
+                    content: invites.map(i => `discord.gg/${i.code}`).join("\n") || "No active invites.",
+                });
+            },
+        },
+        {
+            name: "revoke friend invites",
+            description: "Revokes all generated friend invites.",
+            inputType: ApplicationCommandInputType.BUILT_IN,
+            execute: async (_, ctx) => {
+                await FriendInvites.revokeFriendInvites();
+                sendBotMessage(ctx.channel.id, { content: "All friend invites have been revoked." });
+            },
+        },
+    ],
+});
+```
+
+---
+
+## Real-world example — SilentTyping plugin with options
+
+The built-in `SilentTyping` plugin registers a command with a boolean option
+(`src/plugins/silentTyping/index.tsx`):
+
+```typescript
+import {
+    ApplicationCommandInputType,
+    ApplicationCommandOptionType,
+    findOption,
+    sendBotMessage,
+} from "@api/Commands";
+
+commands: [{
+    name: "silenttype",
+    description: "Toggle whether you're hiding that you're typing or not.",
+    inputType: ApplicationCommandInputType.BUILT_IN,
+    options: [
+        {
+            name: "value",
+            description: "Whether to hide typing (default: toggle current state)",
+            required: false,
+            type: ApplicationCommandOptionType.BOOLEAN,
+        },
+    ],
+    execute: async (args, ctx) => {
+        settings.store.isEnabled = !!findOption(args, "value", !settings.store.isEnabled);
+        sendBotMessage(ctx.channel.id, {
+            content: settings.store.isEnabled
+                ? "Silent typing enabled!"
+                : "Silent typing disabled!",
+        });
+    },
+}],
+```
+
+---
+
+## Guidelines
+
+<Warning>
+Do not create a plugin whose only purpose is a single, trivial slash command that just sends
+text. Vencord's contribution guidelines discourage "simple command" plugins that have no other
+functionality. Commands work best as a secondary interaction surface for plugins that also do
+something else.
+</Warning>
+
+- Keep command names lowercase and use spaces to separate words (for example `"create friend invite"`).
+- Always use `sendBotMessage` to confirm the outcome of a command — never silently succeed or fail.
+- Use `predicate` to hide commands that are not applicable in the current context.
+- Handle async errors: `execute` can be `async`, and Vencord catches rejections and displays an
+  error message via `sendBotMessage` automatically.

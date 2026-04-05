@@ -1,97 +1,84 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "Vencord — The Cutest Discord Mod"
+description: "Enhance your Discord experience with 100+ built-in plugins, custom themes, and a powerful plugin API. Works on Desktop and in-browser."
 ---
 
-## Setting up
+Vencord is a feature-rich Discord client modification that adds 100+ quality-of-life plugins, custom theme support, and a privacy-first design — all with zero telemetry. Whether you want to tweak Discord's interface, add new features, or build your own plugin, Vencord has you covered.
 
-Get your documentation site up and running in minutes.
-
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
-
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/user-guide/installation">
+    Install Vencord on Discord Desktop or your browser in minutes.
   </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
+  <Card title="Plugins" icon="puzzle-piece" href="/user-guide/plugins">
+    Explore 100+ built-in plugins and learn how to manage them.
   </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+  <Card title="Themes & Custom CSS" icon="palette" href="/user-guide/themes">
+    Customize Discord's appearance with themes and CSS.
   </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
+  <Card title="Build a Plugin" icon="code" href="/plugins/quickstart">
+    Write your own Vencord plugin with the full plugin API.
   </Card>
-</Columns>
+</CardGroup>
 
-## Create beautiful pages
+## Get started in minutes
 
-Everything you need to create world-class documentation.
+<Steps>
+  <Step title="Download the installer">
+    Visit [vencord.dev/download](https://vencord.dev/download) and download the installer for your platform (Windows, macOS, or Linux).
+  </Step>
+  <Step title="Run the installer">
+    Run the installer and follow the prompts. It will automatically detect your Discord installation and inject Vencord.
+  </Step>
+  <Step title="Launch Discord">
+    Start Discord. You'll see the Vencord settings appear in your Discord settings under the **Vencord** section.
+  </Step>
+  <Step title="Enable plugins">
+    Open **Settings → Plugins** and enable any of the 100+ built-in plugins you want to use. Changes take effect immediately or after a restart depending on the plugin.
+  </Step>
+</Steps>
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+## Why Vencord?
 
-## Need inspiration?
+<CardGroup cols={2}>
+  <Card title="100+ built-in plugins" icon="plug">
+    From message timestamps to Spotify controls, Vencord ships with a huge library of community-built plugins ready to enable with one click.
+  </Card>
+  <Card title="Privacy first" icon="shield">
+    Vencord blocks Discord analytics and crash reporting out of the box. No telemetry, no tracking beyond what Discord itself does.
+  </Card>
+  <Card title="Custom themes" icon="wand-magic-sparkles">
+    Import any CSS theme including BetterDiscord-compatible themes, or write your own CSS with the built-in editor.
+  </Card>
+  <Card title="Browser support" icon="globe">
+    Run Vencord in Chrome or Firefox via the browser extension, or as a UserScript — no desktop app required.
+  </Card>
+  <Card title="Settings sync" icon="cloud">
+    Optionally sync your plugin configuration and settings across multiple devices and Discord clients.
+  </Card>
+  <Card title="Actively maintained" icon="wrench">
+    Broken plugins are typically fixed within 12 hours. Vencord tracks Discord's updates and keeps plugins working.
+  </Card>
+</CardGroup>
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+## For developers
+
+Vencord exposes a full plugin API that lets you hook into Discord's internals, register custom commands, extend the UI, and more.
+
+<CardGroup cols={2}>
+  <Card title="Plugin overview" icon="book" href="/plugins/overview">
+    Understand the plugin system and what you can build.
+  </Card>
+  <Card title="Quickstart" icon="rocket" href="/plugins/quickstart">
+    Build your first plugin in a few steps.
+  </Card>
+  <Card title="Plugin structure" icon="sitemap" href="/plugins/plugin-structure">
+    Learn the anatomy of a Vencord plugin.
+  </Card>
+  <Card title="API reference" icon="terminal" href="/plugins/api-settings">
+    Browse all available plugin APIs.
+  </Card>
+</CardGroup>
+
+<Note>
+  Vencord is a community project licensed under GPL-3.0. Client modifications technically violate Discord's Terms of Service, but Discord has not taken action against users of client mods. Use at your own discretion — see the [FAQ](/user-guide/faq) for more details.
+</Note>

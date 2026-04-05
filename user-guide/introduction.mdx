@@ -1,0 +1,60 @@
+---
+title: "What is Vencord?"
+description: "Vencord is a feature-rich Discord client modification with 100+ built-in plugins, custom theme support, and a privacy-first design — licensed under GPL-3.0."
+---
+
+Vencord is an open-source Discord client modification that injects directly into the Discord desktop app or runs in your browser via an extension or UserScript. It adds over 100 quality-of-life plugins, a built-in CSS editor, settings synchronization, and privacy protections — all without any telemetry of its own.
+
+<Warning>
+  Client modifications technically violate Discord's [Terms of Service](https://discord.com/terms). Discord has not taken action against users of client mods, and all built-in Vencord plugins are designed to be safe to use. However, if your account is critical to you, proceed at your own discretion. Never use plugins that implement abusive behavior, and avoid posting screenshots that reveal Vencord in servers where it may get you banned.
+</Warning>
+
+## Key features
+
+<CardGroup cols={2}>
+  <Card title="100+ built-in plugins" icon="puzzle-piece" href="/user-guide/plugins">
+    Enable quality-of-life improvements, UI tweaks, Spotify controls, message utilities, and more — all managed from a single settings panel.
+  </Card>
+  <Card title="Privacy first" icon="shield">
+    The built-in `NoTrack` plugin blocks Discord's analytics pipeline and Sentry crash reporting out of the box. No Vencord telemetry is ever collected.
+  </Card>
+  <Card title="Custom themes and CSS" icon="palette" href="/user-guide/themes">
+    Import CSS themes — including BetterDiscord-compatible themes — or write your own with the built-in Monaco-powered CSS editor.
+  </Card>
+  <Card title="Browser extension" icon="globe" href="/user-guide/browser-extension">
+    Run Vencord in Chrome (Manifest V3) or Firefox (Manifest V2) without modifying the desktop app. A UserScript alternative is also available.
+  </Card>
+  <Card title="Settings sync" icon="cloud" href="/user-guide/settings-sync">
+    Optionally sync your enabled plugins and their settings across multiple devices and Discord clients via the Vencord cloud API.
+  </Card>
+  <Card title="All Discord branches" icon="code-branch">
+    Works on Discord Stable, Canary, and PTB. Install on any branch independently, or on all of them at once.
+  </Card>
+</CardGroup>
+
+## How it works
+
+Vencord patches Discord's bundled JavaScript at runtime using a system of webpack patches. Each plugin declares one or more `find`/`replace` patches that target specific module strings inside Discord's bundle. Because patching happens at load time, most changes take effect immediately without restarting Discord.
+
+The settings UI is injected directly into Discord's native settings panel under a **Vencord** section, with sub-pages for Plugins, Themes, Updater, Cloud, and Backup & Restore.
+
+## License
+
+Vencord is free software, released under the **GNU General Public License v3.0 or later** (`GPL-3.0-or-later`). The source code is available on [GitHub](https://github.com/Vendicated/Vencord).
+
+## Where to go next
+
+<CardGroup cols={2}>
+  <Card title="Install Vencord" icon="download" href="/user-guide/installation">
+    Set up Vencord on Windows, macOS, or Linux in a few steps.
+  </Card>
+  <Card title="Browser extension" icon="globe" href="/user-guide/browser-extension">
+    Use Vencord directly in Chrome or Firefox without touching the desktop app.
+  </Card>
+  <Card title="Manage plugins" icon="toggle-on" href="/user-guide/plugins">
+    Browse and configure the 100+ plugins that ship with Vencord.
+  </Card>
+  <Card title="Build a plugin" icon="code" href="/plugins/quickstart">
+    Write your own Vencord plugin using the full plugin API.
+  </Card>
+</CardGroup>

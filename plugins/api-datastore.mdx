@@ -1,0 +1,377 @@
+---
+title: "DataStore API"
+description: "Persist arbitrary plugin data in an IndexedDB-backed key-value store."
+---
+
+The DataStore API is a thin, promise-based wrapper around IndexedDB (modelled on
+[idb-keyval](https://github.com/jakearchibald/idb-keyval)). It provides a single shared store
+(`VencordData` / `VencordStore`) accessible to all plugins. Use it when you need to save data
+that is too large, too dynamic, or too structured for the [Settings API](/plugins/api-settings).
+
+```typescript
+import * as DataStore from "@api/DataStore";
+
+// Save data
+await DataStore.set("MyPlugin_config", { theme: "dark", count: 42 });
+
+// Load data
+const config = await DataStore.get<{ theme: string; count: number }>("MyPlugin_config");
+```
+
+---
+
+## When to use DataStore vs Settings
+
+| | Settings API | DataStore |
+|---|---|---|
+| **Purpose** | User-visible, configurable options | Internal plugin data / caches |
+| **UI** | Rendered automatically in Settings → Plugins | No UI |
+| **Type support** | Typed schema per option | Any structured-clone-compatible value |
+| **Reactivity** | `settings.use()` React hook | Manual — you fetch on demand |
+| **Size** | Small values | Any size supported by IndexedDB |
+| **Best for** | Toggles, selects, text fields | Per-user caches, maps, lists, history |
+
+<Tip>
+  If the user should be able to change a value in the settings panel, use `definePluginSettings`.
+  If you are storing derived or cached state (for example a map of session IDs to custom names),
+  use DataStore.
+</Tip>
+
+---
+
+## Key naming
+
+DataStore is a single shared store — all plugins write to the same IndexedDB object store.
+You **must** prefix every key with your plugin name to avoid collisions with other plugins.
+
+```typescript
+// Good — unambiguous
+const KEY = "BetterSessions_savedSessions";
+const USER_KEY = () => `MyPlugin_data_${UserStore.getCurrentUser().id}`;
+
+// Bad — will conflict with any other plugin that picks the same name
+const KEY = "savedSessions";
+```
+
+<Warning>
+  Vencord provides no namespace isolation between plugins. If two plugins write to the same key
+  the second write silently overwrites the first. Always prefix your keys.
+</Warning>
+
+---
+
+## Storable value types
+
+DataStore relies on IndexedDB, which uses the
+[structured clone algorithm](https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Structured_clone_algorithm)
+to serialize values. You can store:
+
+- Primitive types: `string`, `number`, `boolean`, `bigint`, `null`, `undefined`
+- `Array`, `Object` (plain), `Map`, `Set`
+- `ArrayBuffer`, `TypedArray`, `DataView`
+- `Date`, `RegExp`, `Blob`, `File`
+
+You **cannot** store functions, DOM nodes, or class instances (unless they are structured-clone
+compatible, like `Map` and `Set`).
+
+---
+
+## API reference
+
+### get
+
+Retrieve a single value by key.
+
+```typescript
+function get<T = any>(key: IDBValidKey): Promise<T | undefined>
+```
+
+<ParamField path="key" type="IDBValidKey" required>
+  The key to look up. Returns `undefined` if the key does not exist.
+</ParamField>
+
+```typescript
+const data = await DataStore.get<Map<string, Session>>("MyPlugin_sessions");
+// data is Map | undefined
+```
+
+---
+
+### set
+
+Write a value for a key, creating it if it does not exist.
+
+```typescript
+function set(key: IDBValidKey, value: any): Promise<void>
+```
+
+<ParamField path="key" type="IDBValidKey" required>
+  The key to write.
+</ParamField>
+
+<ParamField path="value" type="any" required>
+  The value to store. Must be structured-clone compatible.
+</ParamField>
+
+```typescript
+await DataStore.set("BetterSessions_savedSessions", savedSessionsCache);
+```
+
+---
+
+### del
+
+Delete a single key.
+
+```typescript
+function del(key: IDBValidKey): Promise<void>
+```
+
+```typescript
+await DataStore.del("MyPlugin_legacyKey");
+```
+
+---
+
+### getMany
+
+Retrieve multiple values in a single transaction. Returns values in the same order as the keys
+array. Missing keys resolve to `undefined`.
+
+```typescript
+function getMany<T = any>(keys: IDBValidKey[]): Promise<T[]>
+```
+
+<ParamField path="keys" type="IDBValidKey[]" required>
+  Array of keys to fetch.
+</ParamField>
+
+```typescript
+const [guilds, groups, friends] = await DataStore.getMany([
+    "RelationshipNotifier_guilds",
+    "RelationshipNotifier_groups",
+    "RelationshipNotifier_friends",
+]);
+```
+
+---
+
+### setMany
+
+Write multiple key-value pairs in a single atomic transaction. Either all writes succeed or
+none do.
+
+```typescript
+function setMany(entries: [IDBValidKey, any][]): Promise<void>
+```
+
+<ParamField path="entries" type="[IDBValidKey, any][]" required>
+  Array of `[key, value]` pairs to write.
+</ParamField>
+
+```typescript
+await DataStore.setMany([
+    ["MyPlugin_cache_guilds", guildMap],
+    ["MyPlugin_cache_users",  userMap],
+]);
+```
+
+---
+
+### delMany
+
+Delete multiple keys in a single transaction.
+
+```typescript
+function delMany(keys: IDBValidKey[]): Promise<void>
+```
+
+```typescript
+// Migration: remove old unscoped keys
+await DataStore.delMany([
+    "relationship-notifier-guilds",
+    "relationship-notifier-groups",
+    "relationship-notifier-friends",
+]);
+```
+
+---
+
+### update
+
+Read a value, apply a transformation, and write the result back — atomically.
+
+```typescript
+function update<T = any>(
+    key: IDBValidKey,
+    updater: (oldValue: T | undefined) => T
+): Promise<void>
+```
+
+<ParamField path="key" type="IDBValidKey" required>
+  The key to update.
+</ParamField>
+
+<ParamField path="updater" type="(oldValue: T | undefined) => T" required>
+  A function that receives the current value (or `undefined`) and returns the new value.
+</ParamField>
+
+```typescript
+await DataStore.update<number>("MyPlugin_runCount", old => (old ?? 0) + 1);
+```
+
+<Note>
+  `update` opens a `readwrite` transaction and does the read and write inside it, so no other
+  code can interleave a write between your read and write.
+</Note>
+
+---
+
+### keys
+
+Return all keys currently in the store.
+
+```typescript
+function keys<KeyType extends IDBValidKey>(): Promise<KeyType[]>
+```
+
+```typescript
+const allKeys = await DataStore.keys<string>();
+const myKeys = allKeys.filter(k => k.startsWith("MyPlugin_"));
+```
+
+---
+
+### values
+
+Return all values currently in the store.
+
+```typescript
+function values<T = any>(): Promise<T[]>
+```
+
+---
+
+### entries
+
+Return all key-value pairs as `[key, value]` tuples.
+
+```typescript
+function entries<KeyType extends IDBValidKey, ValueType = any>(): Promise<[KeyType, ValueType][]>
+```
+
+```typescript
+const pairs = await DataStore.entries<string, any>();
+for (const [key, value] of pairs) {
+    console.log(key, value);
+}
+```
+
+---
+
+### clear
+
+Delete every entry in the store.
+
+```typescript
+function clear(): Promise<void>
+```
+
+<Warning>
+  `clear()` removes data written by **all** plugins, not just yours. Do not call it in production
+  code unless you are absolutely certain that is the desired behaviour.
+</Warning>
+
+---
+
+## Custom stores
+
+By default all functions operate on the shared `VencordData` / `VencordStore` database. You can
+create an isolated store for your plugin by calling `createStore` and passing it as the last
+argument to any DataStore function.
+
+```typescript
+import { createStore, get, set } from "@api/DataStore";
+
+const myStore = createStore("MyPlugin_db", "MyPlugin_store");
+
+await set("config", { debug: true }, myStore);
+const config = await get("config", myStore);
+```
+
+<Note>
+  Using a custom store is rarely necessary. Only do this if you need strict isolation (for example
+  to avoid iterating over other plugins' keys) or if you are storing data under keys that could
+  realistically collide.
+</Note>
+
+---
+
+## Real-world example — BetterSessions plugin
+
+The built-in `BetterSessions` plugin stores a `Map` of session ID hashes to custom names,
+scoped to the current user's ID (`src/plugins/betterSessions/utils.ts`):
+
+```typescript
+import * as DataStore from "@api/DataStore";
+import { UserStore } from "@webpack/common";
+
+// Key is scoped to the logged-in user to support multiple accounts
+const getDataKey = () =>
+    `BetterSessions_savedSessions_${UserStore.getCurrentUser().id}`;
+
+export const savedSessionsCache = new Map<string, { name: string; isNew: boolean }>();
+
+// Persist the in-memory cache to IndexedDB
+export function saveSessionsToDataStore() {
+    return DataStore.set(getDataKey(), savedSessionsCache);
+}
+
+// Hydrate the in-memory cache from IndexedDB on startup
+export async function fetchNamesFromDataStore() {
+    const saved = await DataStore.get<Map<string, { name: string; isNew: boolean }>>(
+        getDataKey()
+    ) ?? new Map();
+
+    saved.forEach((data, idHash) => {
+        savedSessionsCache.set(idHash, data);
+    });
+}
+```
+
+---
+
+## Real-world example — RelationshipNotifier migration
+
+The built-in `RelationshipNotifier` plugin migrates from old unscoped keys to per-user scoped
+keys (`src/plugins/relationshipNotifier/utils.ts`):
+
+```typescript
+import * as DataStore from "@api/DataStore";
+import { UserStore } from "@webpack/common";
+
+const guildsKey  = () => `relationship-notifier-guilds-${UserStore.getCurrentUser().id}`;
+const groupsKey  = () => `relationship-notifier-groups-${UserStore.getCurrentUser().id}`;
+const friendsKey = () => `relationship-notifier-friends-${UserStore.getCurrentUser().id}`;
+
+async function runMigrations() {
+    // Delete old unscoped keys that may have been written by an older version
+    DataStore.delMany([
+        "relationship-notifier-guilds",
+        "relationship-notifier-groups",
+        "relationship-notifier-friends",
+    ]);
+}
+
+export async function syncAndRunChecks() {
+    await runMigrations();
+
+    const [oldGuilds, oldGroups, oldFriends] = await DataStore.getMany([
+        guildsKey(),
+        groupsKey(),
+        friendsKey(),
+    ]);
+
+    // ... diffing logic
+}
+```

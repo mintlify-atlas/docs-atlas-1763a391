@@ -1,0 +1,245 @@
+---
+title: "Webpack patching"
+description: "Modify Discord's internal module code at runtime by intercepting its webpack module loading system."
+---
+
+Discord bundles its entire frontend as a webpack application. Vencord intercepts the module loading pipeline to rewrite module factory source code _before_ the modules execute, letting you change any behavior in Discord without touching its files.
+
+<Warning>
+Webpack patches operate directly on minified JavaScript. A malformed `replace` expression that produces invalid syntax will crash the module and can make Discord unusable until the patch is corrected and Discord is reloaded. Always test patches in the DevTools console first.
+</Warning>
+
+## How patching works
+
+When Discord loads a webpack module, Vencord converts the factory function to a string, runs every registered patch whose `find` matches that string, and then `eval`s the modified source before executing it. The original factory is preserved so Vencord can fall back to it if a patch throws.
+
+Patches are registered by adding a `patches` array to your plugin definition. Vencord processes this array before any modules run.
+
+```typescript
+import definePlugin from "@utils/types";
+
+export default definePlugin({
+    name: "MyPlugin",
+    description: "An example plugin",
+    authors: [],
+
+    patches: [
+        {
+            find: "shouldMention:",
+            replacement: {
+                match: /shouldMention:!\i\.shiftKey/,
+                replace: "shouldMention:false"
+            }
+        }
+    ]
+});
+```
+
+## The `Patch` interface
+
+Each entry in the `patches` array implements the `Patch` interface defined in `src/utils/types.ts`.
+
+<ParamField path="find" type="string | RegExp" required>
+  A string or regular expression that must match somewhere in the module factory source. Vencord compares this against the stringified factory. Use the shortest unique string you can find — prefer a plain string over a RegExp unless a plain string is not specific enough.
+</ParamField>
+
+<ParamField path="replacement" type="PatchReplacement | PatchReplacement[]" required>
+  One or more replacements to apply to the matched module. See [PatchReplacement](#the-patchreplacement-interface) below.
+</ParamField>
+
+<ParamField path="all" type="boolean" default="false">
+  By default a patch is removed after it matches its first module. Set `all: true` to keep the patch active so it applies to every module whose source matches `find`.
+</ParamField>
+
+<ParamField path="noWarn" type="boolean" default="false">
+  Suppress the console warning that appears when no replacement matched inside an otherwise matched module. Useful when you know the replacement is intentionally no-op in some builds.
+</ParamField>
+
+<ParamField path="group" type="boolean" default="false">
+  When `true`, all replacements in the array are treated as an atomic group. If any single replacement has no effect or throws, the entire patch is rolled back to the original source. Use this when your replacements depend on each other.
+</ParamField>
+
+<ParamField path="predicate" type="() => boolean">
+  A function evaluated before patches are registered. If it returns `false` the entire patch entry is skipped. Use this to gate patches on plugin settings.
+</ParamField>
+
+<ParamField path="fromBuild" type="number">
+  The minimum Discord build number this patch applies to. Patches outside the `[fromBuild, toBuild]` range are removed automatically.
+</ParamField>
+
+<ParamField path="toBuild" type="number">
+  The maximum Discord build number this patch applies to.
+</ParamField>
+
+## The `PatchReplacement` interface
+
+Each `PatchReplacement` describes a single find-and-replace operation on the matched module's source string.
+
+<ParamField path="match" type="string | RegExp" required>
+  The pattern to search for inside the module source. Strings are used with `String.prototype.replace`, so they match only the first occurrence. Use a RegExp with the `g` flag to replace all occurrences.
+</ParamField>
+
+<ParamField path="replace" type="string | ReplaceFn" required>
+  The replacement value. When a string, it is passed directly to `String.prototype.replace` — capture group references like `$1`, `$2`, and `$&` work normally. When a function, it receives the same arguments as a `String.prototype.replace` callback `(match, ...groups) => string`.
+</ParamField>
+
+<ParamField path="noWarn" type="boolean" default="false">
+  Suppress the warning for this specific replacement when it produces no change.
+</ParamField>
+
+<ParamField path="predicate" type="() => boolean">
+  Same as `Patch.predicate` but scoped to this individual replacement.
+</ParamField>
+
+<ParamField path="fromBuild" type="number">
+  Minimum Discord build number for this replacement to apply.
+</ParamField>
+
+<ParamField path="toBuild" type="number">
+  Maximum Discord build number for this replacement to apply.
+</ParamField>
+
+## Writing the `find` string
+
+The `find` value tells Vencord which module to target. It must be unique — if it matches multiple modules and `all` is not set, only the first match is patched.
+
+A good strategy:
+
+1. Open Discord DevTools (Ctrl+Shift+I) and navigate to **Sources**.
+2. Search across all files (Ctrl+Shift+F) for a string that is close to the behavior you want to change.
+3. Find a short, distinctive substring from that module's source and use it as `find`.
+
+<Tip>
+Minified variable names change between Discord builds. Anchor your `find` on string literals, property names, or other stable identifiers rather than minified single-letter variable names.
+</Tip>
+
+## Writing replacements
+
+### Simple string replacement
+
+Replace a literal substring with a constant value:
+
+```typescript
+patches: [
+    {
+        find: '("guildsnav")',
+        replacement: {
+            match: /(?<=onClick:\(\)=>{)(?=.{0,300}"discodo")/,
+            replace: "$self.closeFolders();"
+        }
+    }
+]
+```
+
+### Capture groups
+
+Use `$1`, `$2`, etc. to keep parts of the original match and splice in new code around them:
+
+```typescript
+// From noReplyMention — replaces the hard-coded "don't mention" logic
+// with a call to the plugin's own shouldMention method.
+patches: [
+    {
+        find: ',\"Message\")}function',
+        replacement: {
+            match: /:(\i),shouldMention:!(\i)\.shiftKey/,
+            replace: ":$1,shouldMention:$self.shouldMention($1,$2.shiftKey)"
+        }
+    }
+]
+```
+
+### Replace function
+
+When the replacement depends on the captured groups, use a function:
+
+```typescript
+patches: [
+    {
+        find: ".toggleGuildFolderExpand(",
+        replacement: {
+            match: /(\],\(\)=>)(\i\.\i)\.isFolderExpanded\(\i\)\)/,
+            replace: (_, rest, ExpandedGuildFolderStore) =>
+                `${rest}${ExpandedGuildFolderStore}.getExpandedFolders()`,
+        }
+    }
+]
+```
+
+### Multiple replacements with `group`
+
+When several replacements must all succeed or all be skipped, wrap them in a group. This example from `BetterFolders` patches the application layout to inject an additional sidebar:
+
+```typescript
+patches: [
+    {
+        find: "APPLICATION_LIBRARY,render:",
+        group: true,
+        replacement: [
+            {
+                match: /(?<=[[,])((?:!?\i&&)+)\(.{0,50}({className:\i\.\i,themeOverride:\i})\)/g,
+                replace: (m, conditions, props) =>
+                    `${m},${conditions}$self.FolderSideBar(${props})`
+            },
+            {
+                match: /(?<=className:)\i\.\i(?=,"data-fullscreen")/,
+                replace: `"vc-betterFolders-sidebar-grid "+$&`
+            }
+        ]
+    }
+]
+```
+
+### Gating patches on settings
+
+Use `predicate` to skip a patch when a plugin setting is disabled:
+
+```typescript
+patches: [
+    {
+        find: "#{intl::DISCODO_DISABLED}",
+        predicate: () => settings.store.closeAllHomeButton,
+        replacement: {
+            match: /(?<=onClick:\(\)=>{)(?=.{0,300}"discodo")/,
+            replace: "$self.closeFolders();"
+        }
+    }
+]
+```
+
+## Using `$self`
+
+Inside a `replace` string or function, `$self` refers to the plugin object that owns the patch. This lets you call methods on your plugin from within the patched Discord code:
+
+```typescript
+export default definePlugin({
+    name: "NoReplyMention",
+    // ...
+    shouldMention(message, isHoldingShift) {
+        // ... your logic
+    },
+    patches: [
+        {
+            find: ',\"Message\")}function',
+            replacement: {
+                match: /:(\i),shouldMention:!(\i)\.shiftKey/,
+                replace: ":$1,shouldMention:$self.shouldMention($1,$2.shiftKey)"
+            }
+        }
+    ]
+});
+```
+
+## Common pitfalls
+
+<Warning>
+Never use minified variable names (single letters like `\i`) in `find`. These change every Discord update. Use stable string literals or property names instead.
+</Warning>
+
+<Note>
+If your replacement produces no change (the `match` found nothing), Vencord logs a warning to the console including the module id and the pattern. Check the DevTools console during development.
+</Note>
+
+- **Syntax errors in replaced code** crash the module. Wrap complex injections in helper methods on `$self` and call those instead of inlining complicated expressions.
+- **Greedy regexes** can match too much and corrupt surrounding code. Always test your regex against the real minified source before shipping.
+- **`all: true` without specificity** risks patching unintended modules if the `find` string is not unique enough.

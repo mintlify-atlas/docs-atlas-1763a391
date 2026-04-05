@@ -1,0 +1,117 @@
+---
+title: "Settings Sync"
+description: "Sync your Vencord plugin configuration and settings across multiple devices using the optional cloud integration."
+---
+
+Settings Sync is an optional cloud feature that keeps your Vencord configuration consistent across multiple Discord clients or devices. It is entirely opt-in and disabled by default.
+
+<Note>
+  Settings Sync is separate from Discord's own account-level settings. It syncs Vencord-specific data only: which plugins are enabled and their individual configuration values.
+</Note>
+
+## What gets synced
+
+When Settings Sync is active, the following data is included in each sync operation:
+
+- **Plugin enable/disable state** — which plugins are toggled on or off
+- **Plugin settings** — all per-plugin configuration values (e.g. your `spotifyControls` position preference, your `textReplace` rules, etc.)
+- **Quick CSS** — the contents of your Quick CSS editor
+
+The export format is a JSON object with a `settings` key (the full Vencord settings object) and a `quickCss` key, compressed with DEFLATE before being uploaded to the cloud API.
+
+Settings that are **not** synced include theme files stored locally on disk and any secrets or credentials (these are stored in a separate DataStore keyed per-user, not in the main settings blob).
+
+## Enabling Settings Sync
+
+<Steps>
+  <Step title="Open the Cloud tab">
+    In Discord settings, click **Cloud** in the Vencord section of the sidebar (listed as **Vencord Cloud** in the panel title).
+  </Step>
+  <Step title="Enable cloud integration">
+    Toggle on **Enable Cloud Integrations**. This initiates the OAuth 2.0 authorization flow using Discord's own OAuth modal.
+  </Step>
+  <Step title="Authorize with Discord">
+    An authorization dialog appears asking for the `identify` scope. Click **Authorize** to grant Vencord Cloud read access to your Discord user ID (used only for keying your settings store). A secret token is stored locally in Vencord's DataStore, keyed to your Discord user ID and the cloud API origin.
+  </Step>
+  <Step title="Enable Settings Sync">
+    Once authorized, toggle on **Sync settings to cloud**. Your current settings are pushed to the cloud immediately.
+  </Step>
+</Steps>
+
+## Sync direction
+
+By default, syncing is bidirectional. You can control the direction using the `Vencord_cloudSyncDirection` localStorage key, which accepts three values:
+
+| Value | Behavior |
+|---|---|
+| `both` | Push local changes up and pull cloud changes down (default) |
+| `push` | Only push local settings to the cloud |
+| `pull` | Only pull settings from the cloud |
+
+In practice, Vencord compares a `settingsSyncVersion` timestamp (Unix milliseconds) on every sync operation. If the cloud version is newer than your local version, the cloud copy wins. If your local copy is newer, it is pushed up and the server timestamp is adopted.
+
+<Tip>
+  If you want to force-overwrite the cloud copy with your current local settings, use the **Sync to Cloud** button in the Cloud tab. To force-download even if your local settings appear newer, use **Sync from Cloud**.
+</Tip>
+
+## The cloud API
+
+The default cloud endpoint is `https://api.vencord.dev/`. All settings traffic goes to:
+
+- `PUT /v1/settings` — upload compressed settings
+- `GET /v1/settings` — download settings (uses `If-None-Match` with the version timestamp for conditional fetches, returning `304` when nothing has changed)
+- `DELETE /v1/settings` — remove the stored settings blob
+- `DELETE /v1/` — erase all cloud data associated with your account
+
+The settings blob is compressed with `fflate`'s `deflateSync` before uploading and decompressed with `inflateSync` on download.
+
+## Privacy and self-hosting
+
+<CardGroup cols={2}>
+  <Card title="Self-hostable backend" icon="server">
+    The cloud API is open source and self-hostable. Point Vencord at your own instance by changing the **Cloud URL** field in **Settings → Cloud** to your server's base URL.
+  </Card>
+  <Card title="Minimal data collected" icon="shield">
+    The official `api.vencord.dev` backend stores only your settings blob, keyed to your Discord user ID. No message data, no friend lists, nothing beyond what you explicitly sync.
+  </Card>
+</CardGroup>
+
+<Note>
+  If you use a custom cloud URL other than `api.vencord.dev`, Vencord verifies that the domain is allowed by the Content Security Policy before making any requests. On the desktop app you will be prompted to whitelist the domain and restart.
+</Note>
+
+## Backup and Restore (offline alternative)
+
+If you prefer not to use cloud sync, you can export your settings to a local JSON file at any time from **Settings → Backup & Restore**.
+
+<Steps>
+  <Step title="Export settings">
+    Click **Download Settings Backup**. This saves a `vencord-settings-backup-YYYY-MM-DD.json` file containing your full settings object and Quick CSS.
+  </Step>
+  <Step title="Import settings">
+    On another device (or after reinstalling), go to **Settings → Backup & Restore** and click **Upload Settings Backup**. Select the exported JSON file. A restart is required to fully apply the imported settings.
+  </Step>
+</Steps>
+
+<Warning>
+  Importing a settings backup overwrites your current Vencord configuration entirely. Back up your existing settings before importing a file from another device.
+</Warning>
+
+## Revoking access
+
+To disconnect your account from cloud sync:
+
+1. Open **Settings → Cloud**.
+2. Click **Deauthorize** (or disable **Enable Cloud Integrations**). This removes the stored secret token from your local DataStore.
+3. To also delete your data from the server, click **Erase All Data** before deauthorizing.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Plugins" icon="puzzle-piece" href="/user-guide/plugins">
+    Manage the plugin settings that get synced to the cloud.
+  </Card>
+  <Card title="Custom CSS" icon="code" href="/user-guide/custom-css">
+    Quick CSS content is included in every settings sync export.
+  </Card>
+</CardGroup>

@@ -1,0 +1,347 @@
+---
+title: "Webpack common modules"
+description: "Pre-resolved Discord internal modules available from @webpack/common — React, Flux stores, UI components, and utilities."
+---
+
+Discord ships React, its Flux stores, and a large collection of utilities as part of its webpack bundle. Vencord exposes these through a single import path so you do not have to locate them yourself.
+
+```typescript
+import { UserStore, React, Tooltip, FluxDispatcher } from "@webpack/common";
+```
+
+All exports from `@webpack/common` are **lazily resolved**. They point to live Discord modules and are populated when Discord's webpack instance has finished loading — after the `WebpackReady` event fires. Do not access them during module-level initialization or at the top level of a `start()` that runs before `StartAt.WebpackReady`.
+
+<Note>
+Most plugins start at `StartAt.WebpackReady` (the default), so by the time `start()` runs, all common exports are available. If your plugin sets `startAt: StartAt.Init` or `startAt: StartAt.DOMContentLoaded`, treat these exports as potentially `undefined`.
+</Note>
+
+## React
+
+The `React` object and its most-used hooks are re-exported directly. These are the exact same values Discord itself uses, so JSX from your plugin and JSX from Discord share the same React instance.
+
+```typescript
+import {
+    React,
+    ReactDOM,
+    createRoot,
+    useState,
+    useEffect,
+    useLayoutEffect,
+    useMemo,
+    useRef,
+    useReducer,
+    useCallback
+} from "@webpack/common";
+```
+
+| Export | Type | Description |
+|--------|------|-------------|
+| `React` | `typeof import("react")` | The full React namespace. |
+| `ReactDOM` | `typeof import("react-dom")` | React DOM including `createPortal`. |
+| `createRoot` | `typeof import("react-dom/client").createRoot` | React 18 `createRoot`. |
+| `useState` | hook | Shorthand for `React.useState`. |
+| `useEffect` | hook | Shorthand for `React.useEffect`. |
+| `useLayoutEffect` | hook | Shorthand for `React.useLayoutEffect`. |
+| `useMemo` | hook | Shorthand for `React.useMemo`. |
+| `useRef` | hook | Shorthand for `React.useRef`. |
+| `useReducer` | hook | Shorthand for `React.useReducer`. |
+| `useCallback` | hook | Shorthand for `React.useCallback`. |
+
+## Flux stores
+
+Flux stores are Discord's single-source-of-truth for all client state. Every exported store is populated via `waitForStore` internally, so they are ready as soon as `WebpackReady` fires.
+
+```typescript
+import { UserStore, GuildStore, ChannelStore, SelectedChannelStore } from "@webpack/common";
+
+// Get the currently logged-in user
+const me = UserStore.getCurrentUser();
+
+// Get a guild by id
+const guild = GuildStore.getGuild(guildId);
+
+// Get the channel the user currently has open
+const channelId = SelectedChannelStore.getChannelId();
+```
+
+The full list of available stores:
+
+<AccordionGroup>
+  <Accordion title="User & authentication">
+    | Export | Discord store name |
+    |--------|--------------------|
+    | `UserStore` | `UserStore` |
+    | `AuthenticationStore` | `AuthenticationStore` |
+    | `UserProfileStore` | `UserProfileStore` |
+    | `RelationshipStore` | `RelationshipStore` |
+    | `FriendsStore` | `FriendsStore` |
+  </Accordion>
+  <Accordion title="Guilds & channels">
+    | Export | Discord store name |
+    |--------|--------------------|
+    | `GuildStore` | `GuildStore` |
+    | `GuildMemberStore` | `GuildMemberStore` |
+    | `GuildRoleStore` | `GuildRoleStore` |
+    | `GuildChannelStore` | `GuildChannelStore` |
+    | `GuildMemberCountStore` | `GuildMemberCountStore` |
+    | `GuildScheduledEventStore` | `GuildScheduledEventStore` |
+    | `ChannelStore` | `ChannelStore` |
+    | `SelectedChannelStore` | `SelectedChannelStore` |
+    | `SelectedGuildStore` | `SelectedGuildStore` |
+  </Accordion>
+  <Accordion title="Messaging">
+    | Export | Discord store name |
+    |--------|--------------------|
+    | `MessageStore` | `MessageStore` |
+    | `DraftStore` | `DraftStore` |
+    | `TypingStore` | `TypingStore` |
+    | `ReadStateStore` | `ReadStateStore` |
+    | `PendingReplyStore` | `PendingReplyStore` |
+    | `UploadAttachmentStore` | `UploadAttachmentStore` |
+  </Accordion>
+  <Accordion title="Voice & media">
+    | Export | Discord store name |
+    |--------|--------------------|
+    | `VoiceStateStore` | `VoiceStateStore` |
+    | `MediaEngineStore` | `MediaEngineStore` |
+    | `CallStore` | `CallStore` |
+    | `ChannelRTCStore` | `ChannelRTCStore` |
+    | `RTCConnectionStore` | `RTCConnectionStore` |
+  </Accordion>
+  <Accordion title="Appearance & settings">
+    | Export | Discord store name |
+    |--------|--------------------|
+    | `ThemeStore` | `ThemeStore` |
+    | `AccessibilityStore` | `AccessibilityStore` |
+    | `UserGuildSettingsStore` | `UserGuildSettingsStore` |
+    | `UserSettingsProtoStore` | `UserSettingsProtoStore` |
+    | `NotificationSettingsStore` | `NotificationSettingsStore` |
+    | `StreamerModeStore` | `StreamerModeStore` |
+    | `LocaleStore` | `LocaleStore` |
+    | `SpellCheckStore` | `SpellCheckStore` |
+    | `WindowStore` | `WindowStore` |
+  </Accordion>
+  <Accordion title="Other">
+    | Export | Discord store name |
+    |--------|--------------------|
+    | `EmojiStore` | `EmojiStore` |
+    | `StickersStore` | `StickersStore` |
+    | `PermissionStore` | `PermissionStore` |
+    | `PresenceStore` | `PresenceStore` |
+    | `ApplicationStore` | `ApplicationStore` |
+    | `SpotifyStore` | `SpotifyStore` |
+    | `RunningGameStore` | `RunningGameStore` |
+    | `SoundboardStore` | `SoundboardStore` |
+    | `ActiveJoinedThreadsStore` | `ActiveJoinedThreadsStore` |
+    | `PopoutWindowStore` | `PopoutWindowStore` |
+    | `InviteStore` | `InviteStore` |
+    | `InstantInviteStore` | `InstantInviteStore` |
+    | `OverridePremiumTypeStore` | `OverridePremiumTypeStore` |
+  </Accordion>
+</AccordionGroup>
+
+### Reacting to store changes
+
+Use `useStateFromStores` to subscribe a React component to one or more Flux stores. The component re-renders whenever the selected value changes.
+
+```typescript
+import { useStateFromStores, UserStore, ThemeStore } from "@webpack/common";
+
+function MyComponent() {
+    const currentUser = useStateFromStores([UserStore], () => UserStore.getCurrentUser());
+    const theme = useStateFromStores([ThemeStore], () => ThemeStore.theme);
+
+    return <div className={`my-component theme-${theme}`}>{currentUser?.username}</div>;
+}
+```
+
+### `FluxDispatcher`
+
+`FluxDispatcher` lets you dispatch Flux actions and subscribe to them.
+
+```typescript
+import { FluxDispatcher } from "@webpack/common";
+
+// Subscribe to an action
+FluxDispatcher.subscribe("MESSAGE_CREATE", handler);
+
+// Dispatch an action
+FluxDispatcher.dispatch({ type: "SOME_ACTION", payload: data });
+
+// Unsubscribe
+FluxDispatcher.unsubscribe("MESSAGE_CREATE", handler);
+```
+
+## UI components
+
+Discord's own UI components are re-exported so your plugin renders native-looking UI without shipping its own component library.
+
+```typescript
+import {
+    Tooltip,
+    TextInput,
+    Select,
+    Slider,
+    Checkbox,
+    Button,
+    Avatar,
+    MaskedLink,
+    Timestamp,
+    ColorPicker
+} from "@webpack/common";
+```
+
+| Export | Description |
+|--------|-------------|
+| `Tooltip` | Standard Discord tooltip wrapper. |
+| `TextInput` | Single-line text input. |
+| `TextArea` | Multi-line text area. |
+| `Select` | Dropdown select. |
+| `SearchableSelect` | Searchable dropdown. |
+| `Slider` | Numeric range slider. |
+| `Checkbox` | Toggleable checkbox. |
+| `Popout` | Popup positioned relative to an anchor element. |
+| `Dialog` | Modal dialog with `role="dialog"`. |
+| `TabBar` | Horizontal tab navigation. |
+| `Paginator` | Page navigation with prev/next links. |
+| `Clickable` | Accessible wrapper for click-handling without a button element. |
+| `Avatar` | User avatar image. |
+| `ColorPicker` | Color picker with eyedropper support. |
+| `MaskedLink` | Hyperlink with Discord's link masking behavior. |
+| `Timestamp` | Formatted message timestamp. |
+| `FocusLock` | Traps keyboard focus within a container. |
+| `UserSummaryItem` | Horizontal list of user avatars. |
+| `OAuth2AuthorizeModal` | OAuth2 authorization prompt. |
+
+### Scrollers
+
+Vencord wraps Discord's internal scroller factory to expose ready-to-use components:
+
+```typescript
+import { ScrollerThin, ScrollerAuto, ScrollerNone, ListScrollerThin, ListScrollerAuto } from "@webpack/common";
+
+function MyScrollableList({ items }) {
+    return (
+        <ScrollerThin>
+            {items.map(item => <div key={item.id}>{item.name}</div>)}
+        </ScrollerThin>
+    );
+}
+```
+
+### Animations
+
+`Animations` exposes Discord's transition primitives built on its animation library:
+
+```typescript
+import { Animations } from "@webpack/common";
+
+const { Transition, animated } = Animations;
+```
+
+### Legacy `Forms` exports
+
+`Forms.FormTitle` and `Forms.FormText` remain available for backwards compatibility but point to Vencord's `Heading` and `Paragraph` components. Prefer importing those directly.
+
+## Context menu
+
+```typescript
+import { Menu, ContextMenuApi } from "@webpack/common";
+
+// Available menu item types:
+// Menu.Menu, Menu.MenuItem, Menu.MenuSeparator,
+// Menu.MenuCheckboxItem, Menu.MenuRadioItem,
+// Menu.MenuGroup, Menu.MenuSliderControl, Menu.MenuSearchControl
+```
+
+Use these in `contextMenus` patch callbacks — see the [Context Menu API](/plugins/api-context-menu) page for full examples.
+
+## Utilities
+
+### Dispatch and navigation
+
+```typescript
+import {
+    FluxDispatcher,       // Flux action bus
+    NavigationRouter,     // transitionTo, transitionToGuild, back, forward
+    ChannelRouter,        // transitionToChannel, transitionToThread
+    SettingsRouter,       // openUserSettings
+    MessageActions,       // sendMessage, editMessage, deleteMessage
+    ChannelActionCreators // openPrivateChannel
+} from "@webpack/common";
+```
+
+### Data & formatting
+
+```typescript
+import {
+    SnowflakeUtils,  // fromTimestamp, extractTimestamp
+    moment,          // moment.js (same instance Discord uses)
+    lodash,          // lodash (same instance Discord uses)
+    hljs,            // highlight.js for code blocks
+    Parser,          // Discord's markdown parser (parseTopic, etc.)
+    i18n,            // { t, intl } — Discord's i18n system
+    PermissionsBits, // BigInt permission flag constants
+    IconUtils,       // getGuildBannerURL, getUserAvatarURL, etc.
+    DateUtils,       // calendarFormat, isSameDay, diffAsUnits
+    UsernameUtils,   // useName, getGlobalName
+    DisplayProfileUtils, // getDisplayProfile, useDisplayProfile
+} from "@webpack/common";
+```
+
+### Toasts
+
+```typescript
+import { showToast, Toasts } from "@webpack/common";
+
+// Quick helper — shows a message toast
+showToast("Settings saved", Toasts.Type.SUCCESS);
+
+// Manual form for full control
+Toasts.show(Toasts.create("Something went wrong", Toasts.Type.FAILURE, {
+    duration: 5000,
+    position: Toasts.Position.BOTTOM
+}));
+```
+
+Toast types: `MESSAGE`, `SUCCESS`, `FAILURE`, `CUSTOM`, `CLIP`, `LINK`, `FORWARD`, `BOOKMARK`, `CLOCK`.
+
+### Alerts
+
+```typescript
+import { Alerts } from "@webpack/common";
+
+Alerts.show({
+    title: "Are you sure?",
+    body: "This action cannot be undone.",
+    confirmText: "Delete",
+    cancelText: "Cancel",
+    onConfirm: () => { /* ... */ }
+});
+```
+
+### REST API
+
+```typescript
+import { RestAPI } from "@webpack/common";
+
+const response = await RestAPI.get({ url: `/channels/${channelId}/messages` });
+```
+
+### Zustand
+
+Discord uses [Zustand](https://github.com/pmndrs/zustand) for some local state. The same `create` and `persist` middleware instances are exposed:
+
+```typescript
+import { zustandCreate, zustandPersist } from "@webpack/common";
+```
+
+### Constants
+
+```typescript
+import { Constants } from "@webpack/common";
+
+// Constants.Endpoints — REST endpoint paths
+// Constants.UserFlags — numeric user flag bits
+// Constants.FriendsSections — friend list section names
+```

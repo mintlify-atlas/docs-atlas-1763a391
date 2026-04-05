@@ -1,0 +1,230 @@
+---
+title: "Badges API"
+description: "Add custom badges to Discord user profiles using the Badges API."
+---
+
+The Badges API lets your plugin display custom icons in the badge row on a user's profile card. Badges can show a static image, a fully custom React component, an optional click handler, and a tooltip.
+
+## The `userProfileBadge` shorthand
+
+For the common case of adding a single badge, use the `userProfileBadge` field in your `definePlugin` call. Vencord registers the badge when the plugin starts and removes it when the plugin stops.
+
+```typescript
+import { BadgePosition, ProfileBadge } from "@api/Badges";
+import { Devs } from "@utils/constants";
+
+const MY_BADGE: ProfileBadge = {
+    description: "Plugin Tester",
+    iconSrc: "https://cdn.example.com/badges/tester.png",
+    position: BadgePosition.START,
+    shouldShow: ({ userId }) => TESTER_IDS.has(userId),
+    link: "https://example.com/testers",
+};
+
+export default definePlugin({
+    name: "MyPlugin",
+    description: "...",
+    authors: [Devs.You],
+
+    userProfileBadge: MY_BADGE,
+});
+```
+
+## `ProfileBadge` interface
+
+```typescript
+interface ProfileBadge {
+    description?: string;
+    component?: ComponentType<ProfileBadge & BadgeUserArgs>;
+    iconSrc?: string;
+    link?: string;
+    onClick?(event: React.MouseEvent, props: ProfileBadge & BadgeUserArgs): void;
+    onContextMenu?(event: React.MouseEvent, props: BadgeUserArgs): void;
+    shouldShow?(userInfo: BadgeUserArgs): boolean;
+    props?: HTMLProps<HTMLImageElement>;
+    position?: BadgePosition;
+    key?: string;
+    getBadges?(userInfo: BadgeUserArgs): ProfileBadge[];
+}
+```
+
+<ParamField path="description" type="string">
+  Tooltip text shown when hovering over the badge. Required when using `iconSrc`; optional for `component` badges.
+</ParamField>
+
+<ParamField path="component" type="ComponentType<ProfileBadge & BadgeUserArgs>">
+  A custom React component that renders the entire badge. When provided, `iconSrc` and the built-in tooltip are not used — your component is responsible for rendering both the visual and any tooltip. The component receives the full `ProfileBadge` merged with `BadgeUserArgs`.
+</ParamField>
+
+<ParamField path="iconSrc" type="string">
+  URL of the badge image. Used when you want a simple image badge without a custom component.
+</ParamField>
+
+<ParamField path="link" type="string">
+  URL to open when the badge is clicked. Provide either `link` or `onClick`, not both.
+</ParamField>
+
+<ParamField path="onClick" type="(event, props) => void">
+  Custom click handler. Receives the mouse event and the merged `ProfileBadge & BadgeUserArgs` object.
+</ParamField>
+
+<ParamField path="onContextMenu" type="(event, props) => void">
+  Right-click handler. Useful for opening a custom context menu.
+</ParamField>
+
+<ParamField path="shouldShow" type="(userInfo: BadgeUserArgs) => boolean">
+  Called before rendering. Return `false` to hide this badge for a specific user. When omitted, the badge is shown for everyone.
+</ParamField>
+
+<ParamField path="props" type="HTMLProps<HTMLImageElement>">
+  Extra HTML props (e.g. `style`) applied to the `<img>` element. Ignored for `component` badges.
+</ParamField>
+
+<ParamField path="position" type="BadgePosition">
+  Where to insert the badge relative to existing badges. `BadgePosition.START` prepends; `BadgePosition.END` (the default) appends.
+</ParamField>
+
+<ParamField path="key" type="string">
+  A unique key for this badge, required when using `component`. Discord uses this internally to key the rendered element.
+</ParamField>
+
+<ParamField path="getBadges" type="(userInfo: BadgeUserArgs) => ProfileBadge[]">
+  Dynamically return multiple badges for a single registration. Called instead of rendering the badge directly. Must **not** call React hooks.
+</ParamField>
+
+## `BadgeUserArgs`
+
+The context object passed to `shouldShow`, `getBadges`, `onClick`, and `onContextMenu`:
+
+```typescript
+interface BadgeUserArgs {
+    userId: string;
+    guildId: string;
+}
+```
+
+## `BadgePosition` enum
+
+```typescript
+const enum BadgePosition {
+    START,  // Insert before existing badges
+    END     // Append after existing badges (default)
+}
+```
+
+## `addProfileBadge` / `removeProfileBadge`
+
+Register or unregister a badge manually. Use these when you need more control — for example to register badges conditionally at runtime, or to register multiple badges from a single plugin.
+
+```typescript
+import { addProfileBadge, removeProfileBadge, ProfileBadge } from "@api/Badges";
+
+const myBadge: ProfileBadge = { ... };
+
+export default definePlugin({
+    start() {
+        addProfileBadge(myBadge);
+    },
+    stop() {
+        removeProfileBadge(myBadge);
+    }
+});
+```
+
+<Warning>
+  Pass the **same object reference** to both `addProfileBadge` and `removeProfileBadge`. Vencord uses object identity (a `Set`) to track registrations.
+</Warning>
+
+<ResponseField name="addProfileBadge" type="void">
+  Registers the badge. If the badge has a `component`, it is automatically wrapped in an `ErrorBoundary`.
+</ResponseField>
+
+<ResponseField name="removeProfileBadge" type="boolean">
+  Returns `true` if the badge was found and removed, `false` if it was not registered.
+</ResponseField>
+
+## Image badge example
+
+```typescript
+import { BadgePosition, ProfileBadge } from "@api/Badges";
+
+const CONTRIBUTOR_BADGE: ProfileBadge = {
+    description: "Vencord Contributor",
+    iconSrc: "https://cdn.discordapp.com/emojis/1092089799109775453.png?size=64",
+    position: BadgePosition.START,
+    shouldShow: ({ userId }) => isContributor(userId),
+    onClick: (_, { userId }) => openContributorModal(UserStore.getUser(userId)),
+};
+
+export default definePlugin({
+    userProfileBadge: CONTRIBUTOR_BADGE,
+});
+```
+
+## Dynamic multi-badge example
+
+Use `getBadges` to return a different set of badges per user. This pattern is used by `PlatformIndicators` to show per-platform status icons as badges:
+
+```typescript
+import { BadgePosition, BadgeUserArgs, ProfileBadge } from "@api/Badges";
+
+const platformBadge: ProfileBadge = {
+    position: BadgePosition.START,
+    getBadges({ userId }: BadgeUserArgs): ProfileBadge[] {
+        const user = UserStore.getUser(userId);
+        if (!user || user.bot) return [];
+
+        const status = PresenceStore.getClientStatus(user.id);
+        if (!status) return [];
+
+        return Object.entries(status).map(([platform, status]) => ({
+            key: `vc-platform-${platform}`,
+            component: () => (
+                <span className="vc-platform-indicator">
+                    <PlatformIcon platform={platform} status={status} small={false} />
+                </span>
+            ),
+        }));
+    },
+};
+
+export default definePlugin({
+    start() { addProfileBadge(platformBadge); },
+    stop()  { removeProfileBadge(platformBadge); },
+});
+```
+
+## Custom component badge example
+
+When `iconSrc` is not flexible enough, supply a `component`. Your component receives the full merged `ProfileBadge & BadgeUserArgs` as props:
+
+```typescript
+import { Tooltip } from "@webpack/common";
+
+function AnimatedBadge(props: ProfileBadge & BadgeUserArgs) {
+    return (
+        <Tooltip text="Special Member">
+            {tooltipProps => (
+                <img
+                    {...tooltipProps}
+                    src="https://cdn.example.com/badges/animated.gif"
+                    width={22}
+                    height={22}
+                    style={{ borderRadius: "50%" }}
+                />
+            )}
+        </Tooltip>
+    );
+}
+
+const myBadge: ProfileBadge = {
+    key: "my-plugin-special",
+    component: AnimatedBadge,
+    shouldShow: ({ userId }) => SPECIAL_USERS.has(userId),
+    position: BadgePosition.END,
+};
+```
+
+<Tip>
+  Always provide a `key` when using a `component` badge. Discord uses it to key the React element, and omitting it can cause rendering bugs when multiple component badges are present.
+</Tip>

@@ -1,0 +1,204 @@
+---
+title: "Notifications API"
+description: "Show in-app toast notifications or native OS notifications from your plugin."
+---
+
+The Notifications API lets your plugin surface information to the user without interrupting
+their workflow. Notifications appear as small toast cards (by default in the bottom-right
+corner of the Discord window) and can optionally fall back to native OS notifications when
+Discord is not focused.
+
+## showNotification
+
+```typescript
+import { showNotification } from "@api/Notifications";
+
+await showNotification({
+    title: "Relationship Notifier",
+    body: "You are no longer friends with example#1234.",
+    icon: "https://cdn.discordapp.com/avatars/123/abc.png",
+    onClick: () => openUserProfile("123"),
+});
+```
+
+<ParamField path="data" type="NotificationData" required>
+  An object describing the notification to display. See [NotificationData](#notificationdata).
+</ParamField>
+
+`showNotification` is `async`. It resolves when the notification has been queued (not necessarily
+when the user dismisses it). Notifications are shown one at a time via an internal queue —
+calling `showNotification` multiple times rapidly will show them sequentially.
+
+---
+
+## NotificationData
+
+<ParamField path="title" type="string" required>
+  The bold heading at the top of the notification card.
+</ParamField>
+
+<ParamField path="body" type="string" required>
+  Plain-text content shown below the title. Used as the body of a native OS notification when
+  `richBody` is not set.
+</ParamField>
+
+<ParamField path="richBody" type="ReactNode">
+  A custom React element used instead of `body` for the in-app toast. Falls back to `body` for
+  native OS notifications, which do not support rich content.
+</ParamField>
+
+<ParamField path="icon" type="string">
+  URL of a small square icon (for example a user avatar) shown to the left of the notification
+  content.
+</ParamField>
+
+<ParamField path="image" type="string">
+  URL of a large banner image displayed below the notification body. Optimally a 16:9 aspect
+  ratio. Not supported by all native OS notification implementations.
+</ParamField>
+
+<ParamField path="color" type="string">
+  CSS color string used for the progress bar displayed at the bottom of the in-app toast.
+  Defaults to `var(--brand-500)` (Discord's purple).
+</ParamField>
+
+<ParamField path="onClick" type="() => void">
+  Called when the user clicks anywhere on the notification card. By default, clicking also
+  dismisses the notification (see `dismissOnClick`).
+</ParamField>
+
+<ParamField path="onClose" type="() => void">
+  Called when the notification is dismissed for any reason — timeout, user click, or programmatic
+  close.
+</ParamField>
+
+<ParamField path="permanent" type="boolean">
+  When `true`, the notification never auto-dismisses. No progress bar is shown. The user must
+  explicitly click the × button to close it. Default: `false`.
+</ParamField>
+
+<ParamField path="noPersist" type="boolean">
+  When `true`, the notification is not saved to the Notification Log (accessible in Vencord
+  settings). Useful for high-frequency or low-importance notifications. Default: `false`.
+</ParamField>
+
+<ParamField path="dismissOnClick" type="boolean">
+  When `false`, clicking the notification body does not close it — only the × button does.
+  Default: `true`.
+</ParamField>
+
+---
+
+## Timeout and auto-dismiss behaviour
+
+In-app toasts auto-dismiss after a configurable number of milliseconds. The timeout is
+controlled by **Settings → Notifications → Notification Timeout** (`Settings.notifications.timeout`).
+The default is **5 000 ms** (5 seconds).
+
+A visible progress bar shrinks from full width to zero as the timeout elapses. The bar pauses
+while:
+
+- The user hovers over the notification (`isHover`)
+- The Discord window does not have focus (`!hasFocus`)
+
+Setting `permanent: true` removes both the progress bar and the auto-dismiss timer, keeping the
+notification on screen until the user closes it.
+
+<Tip>
+  Use `permanent: true` for important security alerts (for example the `BetterSessions` plugin's
+  new-device warning) and the default auto-dismiss for informational messages.
+</Tip>
+
+---
+
+## Native OS notifications
+
+Vencord can route notifications through the browser's `Notification` API instead of rendering
+its own in-app toast. This is controlled by **Settings → Notifications → Use Native Notifications**:
+
+| Setting | Behaviour |
+|---|---|
+| `"always"` | Always use the OS notification system |
+| `"not-focused"` | Use OS notifications when Discord does not have focus (default) |
+| `"never"` | Always use Vencord's in-app toasts |
+
+<Note>
+  `richBody` and `image` are ignored by native OS notifications. `body` is always used as the
+  notification text. `icon` is passed as the notification icon and is supported on most platforms.
+</Note>
+
+---
+
+## Notification Log
+
+Every notification is written to an internal log unless `noPersist: true` is set. Users can
+review past notifications under **Settings → Notifications → Notification Log**. The log holds
+at most `Settings.notifications.logLimit` entries (default: 50).
+
+---
+
+## Real-world example — RelationshipNotifier plugin
+
+The built-in `RelationshipNotifier` plugin sends a notification whenever the user loses a friend
+or is removed from a server (`src/plugins/relationshipNotifier/utils.ts`):
+
+```typescript
+import { showNotification } from "@api/Notifications";
+
+export function notify(text: string, icon?: string, onClick?: () => void) {
+    showNotification({
+        title: "Relationship Notifier",
+        body: text,
+        icon,
+        onClick,
+    });
+}
+
+// Called when a friend is removed:
+notify(
+    `You are no longer friends with ${getUniqueUsername(user)}.`,
+    user.getAvatarURL(undefined, undefined, false),
+    () => openUserProfile(user.id),
+);
+```
+
+---
+
+## Real-world example — BetterSessions plugin
+
+The built-in `BetterSessions` plugin detects new login sessions and alerts the user with a
+permanent notification (`src/plugins/betterSessions/index.tsx`):
+
+```typescript
+import { showNotification } from "@api/Notifications";
+
+showNotification({
+    title: "BetterSessions",
+    body: "A new session has logged into your account.",
+    permanent: true,
+    onClick: () => SettingsRouter.openUserSettings("sessions_panel"),
+});
+```
+
+The `permanent: true` flag ensures the warning stays on screen until the user actively dismisses
+it, making it harder to miss.
+
+---
+
+## Requesting permission (web / browser extension)
+
+When native notifications are enabled and running in a browser context, Vencord automatically
+calls `Notification.requestPermission()` before displaying the first native notification.
+You do not need to call this yourself — `showNotification` handles it internally:
+
+```typescript
+export async function requestPermission() {
+    return (
+        Notification.permission === "granted" ||
+        (Notification.permission !== "denied" &&
+            (await Notification.requestPermission()) === "granted")
+    );
+}
+```
+
+If permission is denied, Vencord falls back silently to its in-app toast.

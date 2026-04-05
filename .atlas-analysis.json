@@ -1,0 +1,110 @@
+{
+  "projectType": "framework",
+  "projectName": "Vencord",
+  "projectDescription": "A feature-rich Discord client modification framework with 100+ built-in plugins, a powerful plugin API, webpack patching system, and custom theming support.",
+  "theme": "almond",
+  "primaryColor": "#040404",
+  "lightColor": "#ee83a1",
+  "darkColor": "#844c5c",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "User Guide",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "user-guide/introduction",
+              "user-guide/installation",
+              "user-guide/browser-extension"
+            ]
+          },
+          {
+            "group": "Features",
+            "pages": [
+              "user-guide/plugins",
+              "user-guide/themes",
+              "user-guide/settings-sync",
+              "user-guide/custom-css"
+            ]
+          },
+          {
+            "group": "Help",
+            "pages": [
+              "user-guide/faq",
+              "user-guide/troubleshooting"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Plugin Development",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "plugins/overview",
+              "plugins/quickstart",
+              "plugins/plugin-structure"
+            ]
+          },
+          {
+            "group": "Core APIs",
+            "pages": [
+              "plugins/api-settings",
+              "plugins/api-commands",
+              "plugins/api-notifications",
+              "plugins/api-datastore"
+            ]
+          },
+          {
+            "group": "UI Extension APIs",
+            "pages": [
+              "plugins/api-context-menu",
+              "plugins/api-message-events",
+              "plugins/api-badges",
+              "plugins/api-chat-buttons"
+            ]
+          },
+          {
+            "group": "Advanced",
+            "pages": [
+              "plugins/webpack-patching",
+              "plugins/webpack-common",
+              "plugins/native-apis",
+              "plugins/contributing"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "100+ built-in plugins covering UI tweaks, privacy enhancements, and quality-of-life improvements",
+    "Powerful webpack patching system for modifying Discord's internals at runtime",
+    "Rich plugin API with hooks for commands, context menus, message events, badges, and more",
+    "Custom CSS editor and BetterDiscord-compatible theme support",
+    "Cross-platform: works on Discord Desktop (Electron) and in-browser via extension",
+    "Settings sync across devices via optional cloud integration",
+    "Privacy-first: blocks Discord analytics and crash reporting out of the box",
+    "Active maintenance with broken plugins typically fixed within 12 hours"
+  ],
+  "publicApiSurface": [
+    "definePlugin() — define a new Vencord plugin",
+    "Vencord.Api.Commands — register custom slash commands",
+    "Vencord.Api.Settings — persist plugin settings",
+    "Vencord.Api.DataStore — IndexedDB-backed key-value store",
+    "Vencord.Api.Notifications — show in-Discord notifications",
+    "Vencord.Api.ContextMenu — patch and extend context menus",
+    "Vencord.Api.Badges — add custom profile badges",
+    "Vencord.Api.ChatButtons — add buttons to the chat input bar",
+    "Vencord.Api.MessageEvents — intercept message send/edit/click events",
+    "Vencord.Api.MessagePopover — add buttons to message popovers",
+    "Vencord.Api.MessageAccessories — render components below messages",
+    "Vencord.Api.ServerList — add elements to the Discord server list",
+    "Vencord.Api.MemberListDecorators — decorate member list entries",
+    "Vencord.Api.Styles — dynamically load CSS styles",
+    "Vencord.Webpack — access Discord's internal webpack modules",
+    "Vencord.Webpack.Common — pre-resolved common Discord modules (React, Flux, etc.)"
+  ]
+}

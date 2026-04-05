@@ -1,0 +1,166 @@
+---
+title: "Custom CSS"
+description: "Use the built-in Quick CSS editor to apply your own CSS rules to Discord without creating a full theme file."
+---
+
+Quick CSS is Vencord's built-in CSS editor. It gives you a persistent stylesheet that loads on every Discord startup, so you can make targeted visual tweaks — hiding an element, adjusting a font size, overriding a color — without creating or hosting a full theme file.
+
+## Opening the Quick CSS editor
+
+<Steps>
+  <Step title="Open Vencord Settings">
+    Click the gear icon at the bottom of the Discord sidebar to open Settings. Under the **Vencord Settings** section in the left sidebar, click **Vencord**.
+  </Step>
+  <Step title="Click Edit QuickCSS">
+    In the main Vencord panel, click the **Edit QuickCSS** button. This opens the CSS editor in a dedicated tab or panel (using Monaco Editor on desktop).
+  </Step>
+  <Step title="Write your CSS">
+    Type or paste CSS into the editor. Changes are applied live to Discord as you type — no save button or reload needed.
+  </Step>
+</Steps>
+
+<Tip>
+  The Quick CSS editor on the desktop app uses Monaco (the same editor as VS Code) with full syntax highlighting and autocompletion.
+</Tip>
+
+## How Quick CSS works
+
+The `useQuickCss` setting in `Settings.ts` (default: `true`) controls whether Quick CSS is injected. When enabled, Vencord:
+
+1. Creates a `<style id="vencord-custom-css">` element inside the `<vencord-user-styles>` shadow root.
+2. Loads the saved CSS from disk via `VencordNative.quickCss.get()`.
+3. Registers a `addChangeListener` callback so that any edit in the Monaco editor instantly updates the `textContent` of the style element.
+
+Disabling Quick CSS in settings (`useQuickCss = false`) sets the style element's `disabled` property to `true` without clearing your code, so your CSS is preserved and can be re-enabled at any time.
+
+Quick CSS content is also included in Settings Sync exports and local backups — see [Settings Sync](/user-guide/settings-sync).
+
+## Practical CSS examples
+
+### Hide an element
+
+```css
+/* Hide the gift button in the message input bar */
+[class*="giftButton"] {
+  display: none !important;
+}
+```
+
+### Increase font size in chat
+
+```css
+/* Make message text slightly larger */
+[class*="messageContent"] {
+  font-size: 16px !important;
+  line-height: 1.5 !important;
+}
+```
+
+### Override an accent color
+
+```css
+/* Change the brand/accent color across the UI */
+:root {
+  --brand-500: #e91e8c !important;
+}
+```
+
+### Compact message mode spacing
+
+```css
+/* Reduce vertical padding between messages */
+[class*="message-"] {
+  padding-top: 2px !important;
+  padding-bottom: 2px !important;
+}
+```
+
+### Round avatars to squares
+
+```css
+/* Square avatars everywhere */
+[class*="avatar-"],
+[class*="avatarWrapperNormal"] img {
+  border-radius: 4px !important;
+}
+```
+
+## Discord CSS variables
+
+Discord's UI is built on a large set of CSS custom properties (variables) defined on `:root`. Overriding them is the most reliable way to restyle the client because they propagate everywhere Discord uses them.
+
+Common variables to target:
+
+| Variable | Controls |
+|---|---|
+| `--brand-500` | Primary accent (buttons, links, active states) |
+| `--background-primary` | Main chat/panel background |
+| `--background-secondary` | Sidebar and secondary panel background |
+| `--background-tertiary` | Server list and tertiary surfaces |
+| `--header-primary` | Primary heading text color |
+| `--header-secondary` | Secondary heading text color |
+| `--text-normal` | Normal body text color |
+| `--text-muted` | Muted/secondary text |
+| `--interactive-normal` | Default icon and interactive element color |
+| `--interactive-active` | Color when an element is active/selected |
+| `--channels-default` | Default channel name text color |
+
+<Note>
+  Discord obfuscates most class names (e.g. `messageContent-abc123`). Use the selector pattern `[class*="partialName"]` to match them in Quick CSS, or open DevTools and inspect elements to find the exact class string currently in use.
+</Note>
+
+### Reading system-level variables
+
+Vencord injects additional CSS variables derived from the OS (e.g. system accent color on macOS and Windows) into `:root` via the `vencord-os-theme-values` style block. These are available in Quick CSS alongside Discord's own variables.
+
+## Loading external CSS with @import
+
+You can load an entire external stylesheet from Quick CSS using `@import`:
+
+```css
+@import url("https://example.com/my-theme.css");
+
+/* Your local overrides on top */
+:root {
+  --brand-500: #ff6b6b;
+}
+```
+
+<Warning>
+  `@import` rules must appear before any other CSS rules in the file. Rules that appear after a selector or property declaration will be ignored by the browser.
+</Warning>
+
+This is useful for pulling in a full theme while keeping your personal tweaks in the Quick CSS editor rather than editing the theme file directly.
+
+## Combining Quick CSS with themes
+
+Quick CSS is applied after theme links and local theme files, so your Quick CSS rules take precedence over anything a theme sets (given equal specificity). Use this to make per-theme overrides without forking the theme:
+
+```css
+/* Override a color set by an external theme */
+:root {
+  --background-primary: #1a1a2e !important;
+}
+
+/* Undo something a theme does that you dislike */
+[class*="sidebar"] {
+  border-radius: 0 !important;
+}
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Themes" icon="palette" href="/user-guide/themes">
+    Load full CSS theme files for a complete visual overhaul.
+  </Card>
+  <Card title="Settings Sync" icon="cloud" href="/user-guide/settings-sync">
+    Your Quick CSS is included when you sync settings to the cloud.
+  </Card>
+  <Card title="Plugins" icon="puzzle-piece" href="/user-guide/plugins">
+    The `themeAttributes` plugin adds extra CSS classes for more precise targeting.
+  </Card>
+  <Card title="Build a plugin" icon="code" href="/plugins/quickstart">
+    Plugins can inject managed stylesheets programmatically using the Styles API.
+  </Card>
+</CardGroup>

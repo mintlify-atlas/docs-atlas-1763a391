@@ -1,0 +1,496 @@
+---
+title: "Plugin structure"
+description: "Complete reference for the PluginDef interface, Patch, PatchReplacement, PluginAuthor, StartAt, and all setting types."
+---
+
+Every Vencord plugin is the default export of `definePlugin`, which accepts a `PluginDef` object and returns it with full TypeScript typings. This page documents every field in that interface along with the supporting types.
+
+```typescript
+import definePlugin from "@utils/types";
+
+export default definePlugin({
+  name: "MyPlugin",
+  description: "Short description shown in the Plugins list.",
+  authors: [{ name: "YourName", id: 123456789012345678n }],
+});
+```
+
+---
+
+## PluginDef
+
+### Identity
+
+<ParamField path="name" type="string" required>
+  The unique identifier and display name of the plugin. Must not conflict with any existing plugin name. Shown in the Plugins settings list and used as the key in `Vencord.Settings.plugins`.
+</ParamField>
+
+<ParamField path="description" type="string" required>
+  A short human-readable description displayed in the Plugins list below the plugin name.
+</ParamField>
+
+<ParamField path="authors" type="PluginAuthor[]" required>
+  An array of one or more authors. Each entry must include a `name` string and a Discord user `id` as a `BigInt`. See [PluginAuthor](#pluginauthor) below.
+</ParamField>
+
+<ParamField path="tags" type="string[]">
+  Optional freeform tags used for searching in the Plugins settings panel. Not displayed to the user directly.
+</ParamField>
+
+### Lifecycle
+
+<ParamField path="start" type="() => void">
+  Called when the plugin is enabled. Use this to set up event listeners, inject styles, or perform any initialisation not covered by the declarative fields. Guaranteed to run after the stage determined by `startAt`.
+</ParamField>
+
+<ParamField path="stop" type="() => void">
+  Called when the plugin is disabled. Should undo everything `start()` did. Vencord automatically cleans up `commands`, `contextMenus`, `flux`, `managedStyle`, and all UI extension fields — you only need to manually clean up anything your `start()` function set up outside of those fields.
+</ParamField>
+
+<ParamField path="startAt" type="StartAt" default="StartAt.WebpackReady">
+  Controls when `start()` is invoked. See [StartAt](#startat) for the available values. Defaults to `StartAt.WebpackReady`, meaning `start()` runs once Discord's core webpack modules (React, Flux, etc.) have finished loading.
+</ParamField>
+
+<ParamField path="requiresRestart" type="boolean">
+  Whether enabling or disabling this plugin requires a full Discord restart to take effect. Defaults to `true` if the plugin has any `patches`, `false` otherwise. Set explicitly to override the default.
+</ParamField>
+
+### Patches
+
+<ParamField path="patches" type="Omit<Patch, 'plugin'>[]">
+  An array of webpack module patches. Each patch identifies a module via `find` and applies one or more regex replacements to its source before it runs. See [Patch](#patch) for the full interface.
+
+  ```typescript
+  patches: [
+    {
+      find: "{isSidebarVisible:",
+      replacement: {
+        match: /children:\[(\i\.useMemo[^}]+"aria-multiselectable")/,
+        replace: "children:[$self.render(),$1",
+      },
+    },
+  ],
+  ```
+</ParamField>
+
+### Commands
+
+<ParamField path="commands" type="Command[]">
+  An array of client-side slash commands to register when the plugin starts. Commands appear in Discord's command picker and execute entirely client-side. Requires the `CommandsAPI` dependency plugin (added automatically by the plugin manager when this field is present).
+
+  ```typescript
+  commands: [
+    {
+      name: "silenttype",
+      description: "Toggle silent typing.",
+      inputType: ApplicationCommandInputType.BUILT_IN,
+      execute: async (args, ctx) => {
+        // ...
+      },
+    },
+  ],
+  ```
+</ParamField>
+
+### Dependencies and visibility
+
+<ParamField path="dependencies" type="string[]">
+  Names of other Vencord plugins this plugin depends on. Listed dependencies are automatically enabled and started before this plugin. Typically used to declare a dependency on an API plugin such as `"CommandsAPI"` or `"BadgeAPI"`.
+</ParamField>
+
+<ParamField path="required" type="boolean">
+  When `true`, the plugin is always enabled and cannot be disabled by the user. Reserved for core internal plugins.
+</ParamField>
+
+<ParamField path="hidden" type="boolean">
+  When `true`, the plugin does not appear in the Plugins settings list. The plugin can still be enabled programmatically.
+</ParamField>
+
+<ParamField path="enabledByDefault" type="boolean">
+  When `true`, the plugin is enabled out of the box for new users but can be disabled. Has no effect on existing installs where the user has already made a choice.
+</ParamField>
+
+### Settings
+
+<ParamField path="settings" type="DefinedSettings">
+  Typed, persistent settings created with `definePluginSettings` from `@api/Settings`. Settings are rendered automatically in the plugin's settings panel. Prefer this over the legacy `options` field.
+
+  ```typescript
+  import { definePluginSettings } from "@api/Settings";
+  import { OptionType } from "@utils/types";
+
+  const settings = definePluginSettings({
+    showIcon: {
+      type: OptionType.BOOLEAN,
+      default: false,
+      description: "Show a toggle icon in the chat bar",
+      restartNeeded: true,
+    },
+  });
+
+  export default definePlugin({
+    name: "MyPlugin",
+    // ...
+    settings,
+  });
+  ```
+</ParamField>
+
+<ParamField path="settingsAboutComponent" type="React.ComponentType<{}>">
+  A React component rendered at the top of the plugin's settings panel, above the individual setting fields. Use this for explanatory text, links to documentation, or a settings UI that does not fit the standard field pattern.
+</ParamField>
+
+<ParamField path="options" type="Record<string, PluginOptionsItem>" deprecated>
+  Legacy settings API. Prefer `settings` created with `definePluginSettings`. Both fields are functionally equivalent at runtime; `settings` offers better TypeScript inference.
+</ParamField>
+
+### Flux event subscriptions
+
+<ParamField path="flux" type="Partial<Record<FluxEvents | string, (event: any) => void | Promise<void>>>">
+  An object whose keys are Flux event names and values are handler functions. Handlers are subscribed when the plugin starts and unsubscribed when it stops. Errors thrown inside handlers are caught and logged — they do not crash the plugin.
+
+  ```typescript
+  flux: {
+    MESSAGE_CREATE: ({ message }) => {
+      console.log("Received message:", message.id);
+    },
+    VOICE_STATE_UPDATES: async ({ voiceStates }) => {
+      // async handlers are supported
+    },
+  },
+  ```
+</ParamField>
+
+### Context menus
+
+<ParamField path="contextMenus" type="Record<string, NavContextMenuPatchCallback>">
+  A map of context menu `navId` strings to patch callbacks. Each callback receives the menu's children array (mutate it directly) and the props object for the menu. Patches are applied and removed automatically with the plugin lifecycle.
+
+  ```typescript
+  contextMenus: {
+    "message": (children, { message }) => {
+      children.push(
+        <Menu.MenuItem id="my-item" label="Do something" action={() => {}} />
+      );
+    },
+  },
+  ```
+</ParamField>
+
+### Toolbox
+
+<ParamField path="toolboxActions" type="Record<string, () => void> | (() => ReactNode)">
+  Actions added to the Vencord Toolbox panel. When an object, each key is a label and the value is a zero-argument callback. When a function, it must return React `Menu` component children directly.
+
+  ```typescript
+  toolboxActions: {
+    "Open my panel": () => openMyModal(),
+  },
+  ```
+</ParamField>
+
+### Styles
+
+<ParamField path="managedStyle" type="string">
+  A CSS string (or a CSS module reference imported from a `.css` file) that Vencord enables when the plugin starts and disables when it stops. The simplest way to ship plugin-specific styles.
+
+  ```typescript
+  import style from "./style.css?managed";
+
+  export default definePlugin({
+    // ...
+    managedStyle: style,
+  });
+  ```
+</ParamField>
+
+### UI extension fields
+
+<ParamField path="userProfileBadge" type="ProfileBadge">
+  A badge displayed on user profiles. The `ProfileBadge` type is defined in `@api/Badges`.
+</ParamField>
+
+<ParamField path="chatBarButton" type="ChatBarButtonData">
+  A button rendered in the chat bar. Provide `icon` (an SVG React component) and `render` (a `ChatBarButtonFactory` that returns the full button element or `null`). Requires the `ChatInputButtonAPI` dependency (added automatically).
+
+  ```typescript
+  chatBarButton: {
+    icon: MyIcon,
+    render: ({ isMainChat }) => {
+      if (!isMainChat) return null;
+      return <ChatBarButton tooltip="My action" onClick={doSomething}>
+        <MyIcon />
+      </ChatBarButton>;
+    },
+  },
+  ```
+</ParamField>
+
+<ParamField path="messagePopoverButton" type="MessagePopoverButtonData">
+  A button added to the message popover (hover toolbar). Provide `icon` and a `render` function that receives the `Message` object and returns button data or `null`.
+</ParamField>
+
+<ParamField path="renderMessageAccessory" type="MessageAccessoryFactory">
+  A factory function rendered below message content. Receives `{ message }` props and should return a React node or `null`. Requires `MessageAccessoriesAPI` (added automatically).
+</ParamField>
+
+<ParamField path="renderMessageDecoration" type="MessageDecorationFactory">
+  A factory function rendered inline inside the message bubble. Receives message props and returns a React node or `null`. Requires `MessageDecorationsAPI` (added automatically).
+</ParamField>
+
+<ParamField path="renderMemberListDecorator" type="MemberListDecoratorFactory">
+  A factory function that renders a decorator next to member list entries. Requires `MemberListDecoratorsAPI` (added automatically).
+</ParamField>
+
+### Message event hooks
+
+<ParamField path="onBeforeMessageSend" type="MessageSendListener">
+  Called before a message is submitted to Discord's API. You can mutate `message.content` to modify what is sent. Return early to leave the message unchanged. Requires `MessageEventsAPI` (added automatically).
+
+  ```typescript
+  async onBeforeMessageSend(channelId, message) {
+    if (!settings.store.autoTranslate) return;
+    const translated = await translate(message.content);
+    message.content = translated.text;
+  },
+  ```
+</ParamField>
+
+<ParamField path="onBeforeMessageEdit" type="MessageEditListener">
+  Called before a message edit is submitted. Receives `channelId`, `messageId`, and the mutable `message` object.
+</ParamField>
+
+<ParamField path="onMessageClick" type="MessageClickListener">
+  Called when the user clicks a message. Receives the click event and the message.
+</ParamField>
+
+---
+
+## Patch
+
+The `patches` array accepts `Omit<Patch, "plugin">` — the `plugin` field is injected automatically by the plugin manager.
+
+<ParamField path="find" type="string | RegExp" required>
+  A string or regular expression that must match somewhere in the target module's source code. Vencord tests this against every webpack module and applies the replacements only to modules that match. Prefer plain strings; use a `RegExp` only when a string test is not specific enough.
+</ParamField>
+
+<ParamField path="replacement" type="PatchReplacement | PatchReplacement[]" required>
+  One or more replacement operations to apply to the matched module. Applied in order. See [PatchReplacement](#patchreplacement).
+</ParamField>
+
+<ParamField path="all" type="boolean" default="false">
+  When `true`, the patch is applied to every module that matches `find` rather than stopping after the first match.
+</ParamField>
+
+<ParamField path="noWarn" type="boolean" default="false">
+  Suppress the console warning that appears when none of the replacements in this patch made any changes. Useful for patches that are intentionally conditional.
+</ParamField>
+
+<ParamField path="group" type="boolean" default="false">
+  When `true`, all replacements in this patch are applied atomically: if any replacement fails, none of them are applied. Use this when your replacements are mutually dependent.
+</ParamField>
+
+<ParamField path="predicate" type="() => boolean">
+  Evaluated once before patches are registered. If it returns `false`, the entire patch (all replacements) is skipped permanently. Useful for feature flags or platform conditions.
+
+  ```typescript
+  {
+    find: "GuildTooltip - ",
+    replacement: { /* ... */ },
+    predicate: () => settings.store.toolTip,
+  }
+  ```
+</ParamField>
+
+<ParamField path="fromBuild" type="number">
+  Minimum Discord build number for this patch to be registered. The patch is skipped on older builds.
+</ParamField>
+
+<ParamField path="toBuild" type="number">
+  Maximum Discord build number for this patch to be registered. The patch is skipped on newer builds.
+</ParamField>
+
+---
+
+## PatchReplacement
+
+<ParamField path="match" type="string | RegExp" required>
+  The pattern to find within the module source. String values are implicitly converted to `RegExp`. Capture groups in a `RegExp` are available in `replace` as `$1`, `$2`, etc.
+</ParamField>
+
+<ParamField path="replace" type="string | ((match: string, ...groups: string[]) => string)" required>
+  The replacement. When a string, supports standard `String.prototype.replace` substitutions (`$1`, `$&`, `` $` ``, `$'`). When a function, receives the full match followed by each capture group and must return the replacement string.
+
+  ```typescript
+  replacement: {
+    match: /children:\[(\i\.useMemo[^}]+"aria-multiselectable")(?<=className:(\i),.+?)/,
+    replace: "children:[$2?.includes('members')?$self.render():null,$1",
+  }
+  ```
+</ParamField>
+
+<ParamField path="noWarn" type="boolean" default="false">
+  Suppress the warning logged when this specific replacement made no changes to the module source.
+</ParamField>
+
+<ParamField path="predicate" type="() => boolean">
+  Evaluated before patches are registered. If it returns `false`, only this individual replacement is skipped while other replacements in the same patch still apply.
+</ParamField>
+
+<ParamField path="fromBuild" type="number">
+  Minimum Discord build number for this replacement to be applied.
+</ParamField>
+
+<ParamField path="toBuild" type="number">
+  Maximum Discord build number for this replacement to be applied.
+</ParamField>
+
+---
+
+## PluginAuthor
+
+<ParamField path="name" type="string" required>
+  Your display name, shown in the plugin card in Vencord's settings.
+</ParamField>
+
+<ParamField path="id" type="BigInt" required>
+  Your Discord user ID as a `BigInt` literal (append `n` to the number). Displayed alongside your name and used to link to your profile. Use `0n` as a placeholder while developing locally.
+
+  ```typescript
+  authors: [{ name: "Vendicated", id: 343383572805058560n }]
+  ```
+</ParamField>
+
+---
+
+## StartAt
+
+The `StartAt` const enum controls when `start()` is called relative to Vencord's initialisation stages.
+
+<ParamField path="StartAt.Init" type="enum value">
+  Called immediately when Vencord initialises, before any webpack modules have loaded. At this stage React, Flux, and Discord's stores are **not** yet available. Use only for low-level setup that must run before any module evaluation.
+</ParamField>
+
+<ParamField path="StartAt.DOMContentLoaded" type="enum value">
+  Called on the `DOMContentLoaded` event, once the document structure is ready. Webpack has begun loading but core Discord modules may not be available yet.
+</ParamField>
+
+<ParamField path="StartAt.WebpackReady" type="enum value" default>
+  Called once Discord's core webpack modules have finished loading. React, Flux, all common stores, and `@webpack/common` exports are available. **This is the default** and the right choice for the vast majority of plugins.
+</ParamField>
+
+```typescript
+import definePlugin, { StartAt } from "@utils/types";
+
+export default definePlugin({
+  name: "EarlyPlugin",
+  description: "Needs to run before webpack loads.",
+  authors: [{ name: "YourName", id: 0n }],
+  startAt: StartAt.Init,
+  start() {
+    // runs immediately at Vencord init
+  },
+});
+```
+
+---
+
+## Setting types (OptionType)
+
+Settings defined with `definePluginSettings` use the `OptionType` enum to declare the type of each field.
+
+<ParamField path="OptionType.BOOLEAN" type="enum value">
+  A toggle switch. `default` should be `true` or `false`.
+
+  ```typescript
+  showIcon: {
+    type: OptionType.BOOLEAN,
+    description: "Show an icon in the chat bar",
+    default: false,
+    restartNeeded: true,
+  }
+  ```
+</ParamField>
+
+<ParamField path="OptionType.STRING" type="enum value">
+  A text input field. Set `multiline: true` to use a textarea.
+
+  ```typescript
+  prefix: {
+    type: OptionType.STRING,
+    description: "Command prefix",
+    default: "!",
+    placeholder: "Enter a prefix",
+  }
+  ```
+</ParamField>
+
+<ParamField path="OptionType.NUMBER" type="enum value">
+  A numeric input field.
+</ParamField>
+
+<ParamField path="OptionType.BIGINT" type="enum value">
+  A numeric input for `BigInt` values (e.g., Discord snowflake IDs).
+</ParamField>
+
+<ParamField path="OptionType.SELECT" type="enum value">
+  A dropdown select. Requires an `options` array of `{ label, value, default? }` objects.
+
+  ```typescript
+  service: {
+    type: OptionType.SELECT,
+    description: "Translation service",
+    options: [
+      { label: "Google Translate", value: "google", default: true },
+      { label: "DeepL Free", value: "deepl" },
+      { label: "DeepL Pro", value: "deepl-pro" },
+    ] as const,
+  }
+  ```
+</ParamField>
+
+<ParamField path="OptionType.SLIDER" type="enum value">
+  A slider with discrete marker positions. Requires `markers` (an array of at least two numbers) and a `default` value. Set `stickToMarkers: false` to allow values between markers.
+
+  ```typescript
+  volume: {
+    type: OptionType.SLIDER,
+    description: "Notification volume",
+    markers: [0, 25, 50, 75, 100],
+    default: 50,
+    stickToMarkers: true,
+  }
+  ```
+</ParamField>
+
+<ParamField path="OptionType.COMPONENT" type="enum value">
+  Renders a fully custom React component in the settings panel. The component receives a `setValue(newValue)` prop to write back to the setting store.
+
+  ```typescript
+  myCustomField: {
+    type: OptionType.COMPONENT,
+    component: ({ setValue, option }) => (
+      <Button onClick={() => setValue("hello")}>Set to hello</Button>
+    ),
+  }
+  ```
+</ParamField>
+
+<ParamField path="OptionType.CUSTOM" type="enum value">
+  A setting with a completely custom value type that has no UI representation. Useful for storing structured data that the plugin manages itself via `onChange`.
+</ParamField>
+
+### Common setting fields
+
+All setting types (except `CUSTOM` and `COMPONENT`) share these fields from `PluginSettingCommon`:
+
+| Field | Type | Description |
+|---|---|---|
+| `description` | `string` | Label shown in the settings panel |
+| `placeholder` | `string` | Placeholder text for text/number inputs |
+| `restartNeeded` | `boolean` | Shows a "requires restart" badge |
+| `hidden` | `boolean` | Hides the field from the settings UI while still persisting the value |
+| `target` | `"WEB" \| "DESKTOP" \| "BOTH"` | Limits the setting to one platform |
+| `onChange` | `(newValue: any) => void` | Called whenever the setting value changes |
+| `disabled` | `() => boolean` | Disables the field when the function returns `true` |
+| `isValid` | `(value: T) => boolean \| string` | Prevents saving; return a string to show a validation error |
